@@ -112,7 +112,6 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-d
      ```bash
      uv run --env-file .env -- python -u -m src.tools.calibrate_rules --year 2025 --n 5
      ```
-   - 对不同资产类型创建不同 profile（如 `equity_etf` / `bond_etf`）
 
 4) Skills 与工具权限  
    - 调整 `skills/*/SKILL.md` 中的 allowlist/snippets/schema  

@@ -98,8 +98,9 @@ print(result)
 
 ### 5.1 rules.yaml（组合规则阈值）
 原理：
-- 在历史窗口内随机抽样组合并模拟指标分布
-- 对指标分布取分位数生成 `warn/restrict` 阈值
+- 在历史窗口内随机抽样组合：从标的池随机抽取 n 只，使用 Dirichlet(1,...,1) 生成权重
+- 计算组合指标并形成经验分布（波动率、HHI、ADV、spread 等）
+- 对指标分布取分位数生成 `warn/restrict` 阈值（高方向：90%/98%，低方向：10%/2%）
 
 更新方式：
 ```bash
@@ -108,8 +109,10 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <AS
 
 ### 5.2 macro_series.yaml（宏观阈值配置）
 原理：
-- 拉取宏观时序数据
-- 计算相邻变化幅度分布并取分位数，生成 `warn/restrict` 阈值
+- 拉取宏观时序数据，并按 `asof_date` 截断
+- 计算相邻两期的变化幅度（`change_mode=abs` 用绝对差；`pct` 用相对变化）
+- 若 `change_scale=bp`，将变化幅度转换为 bp
+- 对变化幅度分布取分位数生成阈值（默认 warn=90%，restrict=98%）
 
 更新方式：
 ```bash
