@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, Tuple
 
 from ..state import RiskState
+from ..tools.csv_data import previous_trading_date
 
 
 def _sum_weights(weights: Dict[str, float]) -> float:
@@ -69,8 +70,9 @@ def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
     if not universe:
         universe = list(target_weights.keys())
 
+    asof_date = previous_trading_date(date_str)
     normalized = {
-        "asof_date": date_str,
+        "asof_date": asof_date,
         "mode": mode,
         "targets": targets,
         "current_positions": current,

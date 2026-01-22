@@ -110,6 +110,24 @@ def sample_universe(asof_date: str, size: int, seed: str | None) -> List[str]:
     return rng.sample(codes, size)
 
 
+def previous_trading_date(asof_date: str) -> str:
+    if not asof_date:
+        return ""
+    df = load_etf_prices()
+    if df.empty or "date" not in df.columns:
+        return asof_date
+    cutoff = pd.to_datetime(asof_date, errors="coerce")
+    if pd.isna(cutoff):
+        return asof_date
+    prior = df[df["date"] < cutoff]
+    if prior.empty:
+        return asof_date
+    latest = prior["date"].max()
+    if pd.isna(latest):
+        return asof_date
+    return str(latest.date())
+
+
 def market_metrics(
     codes: Iterable[str],
     start_date: str | None,
