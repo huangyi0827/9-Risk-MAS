@@ -1,0 +1,42 @@
+from __future__ import annotations
+
+from typing import Dict, Any
+
+from ..state import RiskState, Finding
+from ..skills_runtime import load_skill, validate_output
+from ..tools.rules import load_rules
+
+
+def market_risk_chain(state: RiskState) -> Dict[str, Any]:
+    metrics = state.get("snapshot_metrics") or {}
+    vol = float(metrics.get("portfolio_volatility", 0.0))
+
+    profile = (state.get("normalized") or {}).get("policy_profile", "default")
+    rules, _ = load_rules(profile)
+    vol_warn = float(rules.get("volatility_warn", 0.15))
+    vol_restrict = float(rules.get("volatility_restrict", 0.25))
+
+    if vol >= vol_restrict:
+        severity = 2
+        summary = "组合波动率偏高"
+    elif vol >= vol_warn:
+        severity = 1
+        summary = "组合波动率高于舒适区间"
+    else:
+        severity = 0
+        summary = "组合波动率处于目标范围"
+
+    finding: Finding = {
+        "agent": "MarketRiskChain",
+        "risk_type": "market",
+        "severity": severity,
+        "summary": summary,
+        "metrics": {"portfolio_volatility": vol},
+        "evidence": [{"ref": "snapshot_metrics.portfolio_volatility", "value": vol}],
+    }
+
+    errors = validate_output(load_skill("risk-market-assessor"), finding)
+    if errors:
+        raise RuntimeError(f"market skill output invalid: {errors}")
+
+    return {"finding_market": finding}

@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RiskMASCommonIO",
+  "type": "object",
+  "properties": {
+    "intent": {
+      "type": "object",
+      "properties": {
+        "date": {"type": "string"},
+        "mode": {"type": "string", "enum": ["target", "delta"]},
+        "targets": {"type": "object"}
+      },
+      "required": ["date", "mode", "targets"]
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "current_positions": {"type": "object"},
+        "universe": {"type": "array", "items": {"type": "string"}},
+        "benchmark": {"type": "string"},
+        "policy_profile": {"type": "string"}
+      }
+    }
+  },
+  "required": ["intent"]
+}

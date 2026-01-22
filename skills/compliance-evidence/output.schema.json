@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ComplianceFinding",
+  "type": "object",
+  "properties": {
+    "severity": {"type": "integer", "minimum": 0, "maximum": 3},
+    "summary": {"type": "string"},
+    "policy_ids": {"type": "array", "items": {"type": "string"}},
+    "evidence": {"type": "array", "items": {"type": "object"}}
+  },
+  "required": ["severity", "summary", "evidence"]
+}

@@ -1,0 +1,40 @@
+default:
+  max_single_weight: 0.6238119527727676
+  max_hhi: 0.44899528683437767
+  max_portfolio_volatility: 0.01977128229393197
+  max_weighted_spread_bps: 232.30459078188952
+  min_weighted_adv: 12907.854597701184
+  volatility_warn: 0.017688905908769155
+  volatility_restrict: 0.01977128229393197
+  spread_warn: 214.39020231701807
+  spread_restrict: 232.30459078188952
+  adv_warn: 23219.61844926824
+  adv_restrict: 12907.854597701184
+  hhi_warn: 0.39249399339366886
+  hhi_restrict: 0.44899528683437767
+  top_weight_warn: 0.5514443934374116
+  top_weight_restrict: 0.6238119527727676
+  effective_n_warn: 2.5478096911168717
+  effective_n_restrict: 2.2271948877904406
+  blocklist:
+  - CCC
+conservative:
+  max_single_weight: 0.687348277263854
+  max_hhi: 0.5129945534471334
+  max_portfolio_volatility: 0.022131960478261162
+  max_weighted_spread_bps: 247.3880835965101
+  min_weighted_adv: 8945.644529394744
+  volatility_warn: 0.01854034379435597
+  volatility_restrict: 0.022131960478261162
+  spread_warn: 222.45345630820145
+  spread_restrict: 247.3880835965101
+  adv_warn: 18212.61050963896
+  adv_restrict: 8945.644529394744
+  hhi_warn: 0.4186675571022924
+  hhi_restrict: 0.5129945534471334
+  top_weight_warn: 0.5820711769730729
+  top_weight_restrict: 0.687348277263854
+  effective_n_warn: 2.3885299569403755
+  effective_n_restrict: 1.9493385265381462
+  blocklist:
+  - CCC

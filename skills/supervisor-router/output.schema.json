@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "SupervisorRoute",
+  "type": "object",
+  "properties": {
+    "nodes_to_run": {
+      "type": "array",
+      "items": {"type": "string"}
+    },
+    "rationale": {"type": "string"}
+  },
+  "required": ["nodes_to_run", "rationale"]
+}

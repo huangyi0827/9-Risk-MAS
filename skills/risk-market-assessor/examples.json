@@ -1,0 +1,10 @@
+[
+  {
+    "input": {"snapshot_metrics": {"portfolio_volatility": 0.2}},
+    "output": {
+      "severity": 1,
+      "summary": "portfolio volatility above comfort range",
+      "evidence": [{"ref": "snapshot_metrics.portfolio_volatility", "value": 0.2}]
+    }
+  }
+]

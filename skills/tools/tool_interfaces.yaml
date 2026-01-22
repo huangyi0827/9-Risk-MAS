@@ -1,0 +1,59 @@
+tools:
+  - name: macro_timeseries
+    type: Tool
+    description: "Return macro indicator time series samples."
+    owner: "risk_mas"
+    tags: ["macro", "timeseries"]
+    default_max_calls: 3
+    default_timeout_ms: 8000
+    input_schema:
+      type: object
+      properties:
+        series:
+          type: string
+      required: [series]
+    provenance: [source, timestamp, params_hash]
+  - name: macro_search
+    type: Tool
+    description: "Search macro documents."
+    owner: "risk_mas"
+    tags: ["macro", "rag"]
+    default_max_calls: 3
+    default_timeout_ms: 8000
+    input_schema:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+    provenance: [source, timestamp, params_hash]
+  - name: policy_search
+    type: Tool
+    description: "Search compliance policy snippets."
+    owner: "risk_mas"
+    tags: ["compliance", "rag"]
+    default_max_calls: 3
+    default_timeout_ms: 8000
+    input_schema:
+      type: object
+      properties:
+        query:
+          type: string
+      required: [query]
+    provenance: [source, timestamp, params_hash]
+  - name: allowlist_check
+    type: Tool
+    description: "Check if a security is allowed by policy."
+    owner: "risk_mas"
+    tags: ["compliance", "allowlist"]
+    default_max_calls: 3
+    default_timeout_ms: 5000
+    input_schema:
+      type: object
+      properties:
+        code:
+          type: string
+        profile:
+          type: string
+      required: [code]
+    provenance: [source, timestamp, params_hash]
