@@ -123,11 +123,6 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-d
    - 若需要最小输出，可只保留表格视图
 
 
-## 拓展练习建议
-1. 把 `market/liquidity` 的口径改成你认可的“真实流动性指标”
-2. 给 `rules.yaml` 增加新的风险维度并落到 chain
-3. 新增一个链路（如 `volatility_regime`）并接入 router
-4. 强化证据规则（仅允许特定 ref）
 
 ## 目录结构（精简）
 ```

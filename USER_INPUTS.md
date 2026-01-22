@@ -93,9 +93,30 @@ print(result)
 
 - 通过 `context.policy_profile` 选择：`default` 或 `conservative`
 - 规则来源：`cufel_practice_data/rules.yaml`
-- 可自行新增 profile（如 `equity_etf`），并在规则文件中定义阈值
 
-## 5) 最小可运行样例
+## 5) 阈值文件说明（原理与更新方式）
+
+### 5.1 rules.yaml（组合规则阈值）
+原理：
+- 在历史窗口内随机抽样组合并模拟指标分布
+- 对指标分布取分位数生成 `warn/restrict` 阈值
+
+更新方式：
+```bash
+uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <ASOF_DATE>（这里填目标持仓日期的前一个交易日） --n 5
+```
+
+### 5.2 macro_series.yaml（宏观阈值配置）
+原理：
+- 拉取宏观时序数据
+- 计算相邻变化幅度分布并取分位数，生成 `warn/restrict` 阈值
+
+更新方式：
+```bash
+uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-date <ASOF_DATE>（同上）
+```
+
+## 6) 最小可运行样例
 ```python
 from risk_mas import RiskMAS
 
