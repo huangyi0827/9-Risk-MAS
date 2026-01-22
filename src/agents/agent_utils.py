@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import json
-from typing import Any, Dict, List, Sequence
+import time
+from typing import Any, Dict, List, Sequence, Callable
 
 from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.tools import tool
 
 
 def _parse_tool_output(content: Any) -> Any:
@@ -51,3 +53,23 @@ def last_ai_content(messages: Sequence[Any]) -> str:
                 return json.dumps(content, separators=(",", ":"))
             return str(content)
     return ""
+
+
+def wrap_tool(name: str, fn: Callable[..., Dict[str, Any]]):
+    @tool(name)
+    def _wrapped(*args, **kwargs) -> Dict[str, Any]:
+        """Wrapped tool with latency/error capture."""
+        start = time.monotonic()
+        error = None
+        try:
+            result = fn(*args, **kwargs)
+        except Exception as exc:  # pragma: no cover - runtime tool errors
+            error = repr(exc)
+            result = {"error": error}
+        latency_ms = int((time.monotonic() - start) * 1000)
+        if isinstance(result, dict):
+            result.setdefault("tool_meta", {})
+            result["tool_meta"].update({"latency_ms": latency_ms, "error": error})
+        return result
+
+    return _wrapped

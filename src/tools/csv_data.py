@@ -110,6 +110,15 @@ def sample_universe(asof_date: str, size: int, seed: str | None) -> List[str]:
     return rng.sample(codes, size)
 
 
+def lookback_start_date(asof_date: str, lookback_days: int) -> str:
+    if not asof_date:
+        return ""
+    cutoff = pd.to_datetime(asof_date, errors="coerce")
+    if pd.isna(cutoff):
+        return ""
+    return (cutoff - pd.Timedelta(days=int(lookback_days))).date().isoformat()
+
+
 def previous_trading_date(asof_date: str) -> str:
     if not asof_date:
         return ""

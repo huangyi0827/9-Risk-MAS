@@ -6,15 +6,18 @@ from ..state import RiskState, Finding
 from ..skills_runtime import load_skill
 
 
-_ALLOWED_EVIDENCE_PREFIXES = ("snapshot_metrics.", "rules.", "tool:")
+_DEFAULT_EVIDENCE_PREFIXES = ("snapshot_metrics.", "rules.", "tool:")
 
 
-def _is_allowed_ref(ref: str) -> bool:
-    return any(ref.startswith(p) for p in _ALLOWED_EVIDENCE_PREFIXES)
+def _is_allowed_ref(ref: str, prefixes: tuple[str, ...]) -> bool:
+    return any(ref.startswith(p) for p in prefixes)
 
 
 def _sanitize_evidence(
-    state: RiskState, evidence: List[Dict[str, Any]], gaps: List[Dict[str, Any]]
+    state: RiskState,
+    evidence: List[Dict[str, Any]],
+    gaps: List[Dict[str, Any]],
+    prefixes: tuple[str, ...],
 ) -> List[Dict[str, Any]]:
     sanitized: List[Dict[str, Any]] = []
     for item in evidence:
@@ -23,7 +26,7 @@ def _sanitize_evidence(
         ref = str(item.get("ref") or "").strip()
         if not ref:
             continue
-        if not _is_allowed_ref(ref):
+        if not _is_allowed_ref(ref, prefixes):
             gaps.append(
                 {
                     "type": "evidence",
@@ -68,7 +71,8 @@ def reducer_chain(state: RiskState) -> Dict[str, Any]:
                 spec = load_skill(skill_name)
                 evidence = f.get("evidence") or []
                 if isinstance(evidence, list):
-                    evidence = _sanitize_evidence(state, evidence, evidence_gaps)
+                    prefixes = tuple(spec.evidence_prefixes) if spec.evidence_prefixes else _DEFAULT_EVIDENCE_PREFIXES
+                    evidence = _sanitize_evidence(state, evidence, evidence_gaps, prefixes)
                 else:
                     evidence = []
                 f["evidence"] = evidence

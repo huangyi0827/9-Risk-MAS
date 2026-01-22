@@ -9,6 +9,10 @@ outputs:
   - compliance_finding
 policy_version: "local-default"
 skills_hash: ""
+evidence_prefixes:
+  - snapshot_metrics.
+  - rules.
+  - tool:
 tools:
   allowlist:
     - policy_search

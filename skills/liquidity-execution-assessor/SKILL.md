@@ -8,6 +8,10 @@ outputs:
   - liquidity_finding
 policy_version: "local-default"
 skills_hash: ""
+evidence_prefixes:
+  - snapshot_metrics.
+  - rules.
+  - tool:
 tools:
   allowlist: []
   max_calls: 0

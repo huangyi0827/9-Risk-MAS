@@ -89,6 +89,7 @@ def build_graph() -> Callable[[RiskState], RiskState]:
         state.update(validate_and_normalize(state.get("intent", {}), state.get("context", {})))
         state.update(check_data_quality(state))
         state.update(risk_snapshot_bundle(state))
+        state.update(gatekeeper_chain(state))
         state.update(router_chain(state))
         # 这里可调用 chain/agent（骨架版可直接跳过或给默认 finding）
         state.update(reducer_chain(state))
@@ -101,16 +102,16 @@ def build_graph() -> Callable[[RiskState], RiskState]:
 ```
 
 `router.py`
-根据数据质量与策略，决定哪些分析节点要运行。
+基于 gatekeeper 产出的候选节点，形成最终的执行清单。
 
 ```python
 from typing import Dict, Any
 from ..state import RiskState
 
 def router_chain(state: RiskState) -> Dict[str, Any]:
-    # TODO: 基于 data_quality / policy_profile 选择候选节点
-    candidate_nodes = ["market", "concentration", "diversification", "liquidity", "macro"]
-    return {"candidate_nodes": candidate_nodes, "nodes_to_run": candidate_nodes}
+    # TODO: 基于 candidate_nodes 决定最终 nodes_to_run
+    candidate_nodes = state.get("candidate_nodes") or []
+    return {"nodes_to_run": candidate_nodes}
 
 
 ```

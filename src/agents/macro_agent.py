@@ -7,14 +7,12 @@ import time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Dict, List, Tuple, Callable
+from typing import Any, Dict, List, Tuple
 
 from langchain.agents import create_agent
 import yaml
-from langchain_core.tools import tool
-
 from .prompts import MACRO_SYSTEM_PROMPT
-from .agent_utils import extract_tool_calls, last_ai_content
+from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
 from ..state import RiskState, Finding
 from ..tools.csv_data import macro_search_hits
 from ..skills_runtime import load_skill, build_system_prompt, filter_tools, validate_output
@@ -242,24 +240,6 @@ def _macro_search_impl(query: str) -> Dict[str, Any]:
     }
 
 
-def _wrap_tool(name: str, fn: Callable[..., Dict[str, Any]]):
-    @tool(name)
-    def _wrapped(*args, **kwargs) -> Dict[str, Any]:
-        """Wrapped tool with latency/error capture."""
-        start = time.monotonic()
-        error = None
-        try:
-            result = fn(*args, **kwargs)
-        except Exception as exc:  # pragma: no cover - runtime tool errors
-            error = repr(exc)
-            result = {"error": error}
-        latency_ms = int((time.monotonic() - start) * 1000)
-        if isinstance(result, dict):
-            result.setdefault("tool_meta", {})
-            result["tool_meta"].update({"latency_ms": latency_ms, "error": error})
-        return result
-
-    return _wrapped
 
 
 _CURRENT_ASOF_DATE = ""
@@ -270,10 +250,10 @@ def _set_asof_date(asof_date: str) -> None:
     _CURRENT_ASOF_DATE = asof_date or ""
 
 
-macro_timeseries = _wrap_tool("macro_timeseries", _macro_timeseries_impl)
+macro_timeseries = wrap_tool("macro_timeseries", _macro_timeseries_impl)
 
 
-macro_search = _wrap_tool("macro_search", _macro_search_impl)
+macro_search = wrap_tool("macro_search", _macro_search_impl)
 
 
 def _fallback_finding(severity: int) -> Finding:

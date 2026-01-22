@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from ..state import RiskState, Finding
-from ..skills_runtime import load_skill, validate_output
-from ..tools.rules import load_rules
+from .common import load_rules_cached, validate_finding
 
 
 def liquidity_chain(state: RiskState) -> Dict[str, Any]:
@@ -13,7 +12,7 @@ def liquidity_chain(state: RiskState) -> Dict[str, Any]:
     adv = float(metrics.get("weighted_adv", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules, _ = load_rules(profile)
+    rules = load_rules_cached(profile)
     spread_warn = float(rules.get("spread_warn", 40))
     spread_restrict = float(rules.get("spread_restrict", 60))
     adv_warn = float(rules.get("adv_warn", 5_000_000))
@@ -41,8 +40,6 @@ def liquidity_chain(state: RiskState) -> Dict[str, Any]:
         ],
     }
 
-    errors = validate_output(load_skill("liquidity-execution-assessor"), finding)
-    if errors:
-        raise RuntimeError(f"liquidity skill output invalid: {errors}")
+    validate_finding("liquidity-execution-assessor", finding, "liquidity")
 
     return {"finding_liquidity": finding}

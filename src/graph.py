@@ -71,35 +71,24 @@ def build_graph(llm=None):
         next_agent = pending.pop(0)
         return {"next_agent": next_agent, "pending_agents": pending}
 
-    def market_node(state: RiskState) -> Dict[str, Any]:
-        if not _should_run(state, "market"):
-            return {}
-        return market_risk_chain(state)
+    def _guarded_node(name: str, fn):
+        def _node(state: RiskState) -> Dict[str, Any]:
+            if not _should_run(state, name):
+                return {}
+            return fn(state)
 
-    def concentration_node(state: RiskState) -> Dict[str, Any]:
-        if not _should_run(state, "concentration"):
-            return {}
-        return concentration_chain(state)
+        return _node
 
-    def diversification_node(state: RiskState) -> Dict[str, Any]:
-        if not _should_run(state, "diversification"):
-            return {}
-        return diversification_chain(state)
-
-    def liquidity_node(state: RiskState) -> Dict[str, Any]:
-        if not _should_run(state, "liquidity"):
-            return {}
-        return liquidity_chain(state)
-
-    def macro_node(state: RiskState) -> Dict[str, Any]:
-        if not _should_run(state, "macro"):
-            return {}
-        return run_macro_agent(state, llm)
-
-    def compliance_node(state: RiskState) -> Dict[str, Any]:
-        if not _should_run(state, "compliance"):
-            return {}
-        return run_compliance_agent(state, llm)
+    analysis_nodes = {
+        "market": market_risk_chain,
+        "concentration": concentration_chain,
+        "diversification": diversification_chain,
+        "liquidity": liquidity_chain,
+    }
+    agent_nodes = {
+        "macro": lambda state: run_macro_agent(state, llm),
+        "compliance": lambda state: run_compliance_agent(state, llm),
+    }
 
     def reducer_node(state: RiskState) -> Dict[str, Any]:
         return reducer_chain(state)
@@ -122,12 +111,10 @@ def build_graph(llm=None):
     g.add_node("supervisor", RunnableLambda(supervisor_node))
     g.add_node("dispatch", RunnableLambda(dispatch_node))
 
-    g.add_node("market", RunnableLambda(market_node))
-    g.add_node("concentration", RunnableLambda(concentration_node))
-    g.add_node("diversification", RunnableLambda(diversification_node))
-    g.add_node("liquidity", RunnableLambda(liquidity_node))
-    g.add_node("macro", RunnableLambda(macro_node))
-    g.add_node("compliance", RunnableLambda(compliance_node))
+    for name, fn in analysis_nodes.items():
+        g.add_node(name, RunnableLambda(_guarded_node(name, fn)))
+    for name, fn in agent_nodes.items():
+        g.add_node(name, RunnableLambda(_guarded_node(name, fn)))
 
     g.add_node("reducer", RunnableLambda(reducer_node))
     g.add_node("decision", RunnableLambda(decision_node))
@@ -143,26 +130,16 @@ def build_graph(llm=None):
 
     g.add_edge("supervisor", "dispatch")
 
+    dispatch_targets = {name: name for name in {**analysis_nodes, **agent_nodes}}
+    dispatch_targets["reducer"] = "reducer"
     g.add_conditional_edges(
         "dispatch",
         _next_node,
-        {
-            "market": "market",
-            "concentration": "concentration",
-            "diversification": "diversification",
-            "liquidity": "liquidity",
-            "macro": "macro",
-            "compliance": "compliance",
-            "reducer": "reducer",
-        },
+        dispatch_targets,
     )
 
-    g.add_edge("market", "dispatch")
-    g.add_edge("concentration", "dispatch")
-    g.add_edge("diversification", "dispatch")
-    g.add_edge("liquidity", "dispatch")
-    g.add_edge("macro", "dispatch")
-    g.add_edge("compliance", "dispatch")
+    for name in {**analysis_nodes, **agent_nodes}:
+        g.add_edge(name, "dispatch")
     g.add_edge("reducer", "constraints")
     g.add_edge("constraints", "decision")
     g.add_edge("decision", "solver")

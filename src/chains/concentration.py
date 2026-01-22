@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from ..state import RiskState, Finding
-from ..tools.rules import load_rules
-from ..skills_runtime import load_skill, validate_output
+from .common import load_rules_cached, validate_finding
 
 
 def concentration_chain(state: RiskState) -> Dict[str, Any]:
@@ -13,7 +12,7 @@ def concentration_chain(state: RiskState) -> Dict[str, Any]:
     top_weight = float(metrics.get("top_weight", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules, _ = load_rules(profile)
+    rules = load_rules_cached(profile)
     hhi_warn = float(rules.get("hhi_warn", 0.25))
     hhi_restrict = float(rules.get("hhi_restrict", 0.35))
     top_warn = float(rules.get("top_weight_warn", 0.3))
@@ -41,8 +40,6 @@ def concentration_chain(state: RiskState) -> Dict[str, Any]:
         ],
     }
 
-    errors = validate_output(load_skill("risk-market-assessor"), finding)
-    if errors:
-        raise RuntimeError(f"concentration skill output invalid: {errors}")
+    validate_finding("risk-market-assessor", finding, "concentration")
 
     return {"finding_concentration": finding}

@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any
 
 import os
 
 from ..state import RiskState
-from .csv_data import market_metrics
+from .csv_data import market_metrics, lookback_start_date
 
 
 def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
@@ -23,12 +23,7 @@ def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
             except ValueError:
                 aum = None
     lookback_days = int(os.getenv("MARKET_LOOKBACK_DAYS", "60"))
-    start_date = ""
-    if asof_date:
-        try:
-            start_date = (datetime.strptime(asof_date, "%Y-%m-%d") - timedelta(days=lookback_days)).date().isoformat()
-        except ValueError:
-            start_date = ""
+    start_date = lookback_start_date(asof_date, lookback_days)
 
     codes = set(target_weights) | set(current_weights)
     market = market_metrics(codes, start_date or asof_date, asof_date)

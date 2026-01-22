@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from ..state import RiskState, Finding
-from ..tools.rules import load_rules
-from ..skills_runtime import load_skill, validate_output
+from .common import load_rules_cached, validate_finding
 
 
 def diversification_chain(state: RiskState) -> Dict[str, Any]:
@@ -12,7 +11,7 @@ def diversification_chain(state: RiskState) -> Dict[str, Any]:
     effective_n = float(metrics.get("effective_n", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules, _ = load_rules(profile)
+    rules = load_rules_cached(profile)
     n_warn = float(rules.get("effective_n_warn", 5))
     n_restrict = float(rules.get("effective_n_restrict", 3))
 
@@ -35,8 +34,6 @@ def diversification_chain(state: RiskState) -> Dict[str, Any]:
         "evidence": [{"ref": "snapshot_metrics.effective_n", "value": effective_n}],
     }
 
-    errors = validate_output(load_skill("risk-market-assessor"), finding)
-    if errors:
-        raise RuntimeError(f"diversification skill output invalid: {errors}")
+    validate_finding("risk-market-assessor", finding, "diversification")
 
     return {"finding_diversification": finding}

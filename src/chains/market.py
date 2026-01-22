@@ -3,8 +3,7 @@ from __future__ import annotations
 from typing import Dict, Any
 
 from ..state import RiskState, Finding
-from ..skills_runtime import load_skill, validate_output
-from ..tools.rules import load_rules
+from .common import load_rules_cached, validate_finding
 
 
 def market_risk_chain(state: RiskState) -> Dict[str, Any]:
@@ -12,7 +11,7 @@ def market_risk_chain(state: RiskState) -> Dict[str, Any]:
     vol = float(metrics.get("portfolio_volatility", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules, _ = load_rules(profile)
+    rules = load_rules_cached(profile)
     vol_warn = float(rules.get("volatility_warn", 0.15))
     vol_restrict = float(rules.get("volatility_restrict", 0.25))
 
@@ -35,8 +34,6 @@ def market_risk_chain(state: RiskState) -> Dict[str, Any]:
         "evidence": [{"ref": "snapshot_metrics.portfolio_volatility", "value": vol}],
     }
 
-    errors = validate_output(load_skill("risk-market-assessor"), finding)
-    if errors:
-        raise RuntimeError(f"market skill output invalid: {errors}")
+    validate_finding("risk-market-assessor", finding, "market")
 
     return {"finding_market": finding}

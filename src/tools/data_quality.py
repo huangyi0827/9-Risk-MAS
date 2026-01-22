@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Dict, Any, List
 
 import os
@@ -11,6 +11,7 @@ from .csv_data import (
     macro_docs_available,
     macro_latest_date,
     market_metrics,
+    lookback_start_date,
     security_master_codes,
 )
 
@@ -37,12 +38,7 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
     market_codes = set()
     market_checked = False
     lookback_days = int(os.getenv("MARKET_LOOKBACK_DAYS", "60"))
-    start_date = ""
-    if asof_date:
-        try:
-            start_date = (datetime.strptime(asof_date, "%Y-%m-%d") - timedelta(days=lookback_days)).date().isoformat()
-        except ValueError:
-            start_date = ""
+    start_date = lookback_start_date(asof_date, lookback_days)
 
     if universe:
         metrics = market_metrics(universe, start_date or asof_date, asof_date)

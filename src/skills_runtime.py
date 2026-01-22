@@ -36,6 +36,7 @@ class SkillSpec:
     max_calls: int
     timeout_ms: int
     require_evidence: bool
+    evidence_prefixes: List[str]
     limits: Dict[str, Any]
     stop_condition: List[str]
     cost_budget: Dict[str, Any]
@@ -74,6 +75,7 @@ def load_skill(skill_dir: str) -> SkillSpec:
     max_calls = int(tools_meta.get("max_calls") or 0)
     timeout_ms = int(tools_meta.get("timeout_ms") or 0)
     require_evidence = bool(tools_meta.get("require_evidence") or False)
+    evidence_prefixes = list(meta.get("evidence_prefixes") or [])
 
     limits = dict(meta.get("limits") or {})
     stop_condition = list(meta.get("stop_condition") or [])
@@ -95,6 +97,7 @@ def load_skill(skill_dir: str) -> SkillSpec:
         max_calls=max_calls,
         timeout_ms=timeout_ms,
         require_evidence=require_evidence,
+        evidence_prefixes=evidence_prefixes,
         limits=limits,
         stop_condition=stop_condition,
         cost_budget=cost_budget,

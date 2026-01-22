@@ -161,7 +161,7 @@ risk-mas/
     
     chains/
       gatekeeper.py       # 确定性裁剪候选节点（数据缺失则中断）
-      router.py           # 基础路由（候选 → nodes_to_run）
+      router.py           # 路由（基于 gatekeeper 的候选 → nodes_to_run）
       supervisor.py       # LLM 调度，失效时回退到确定性候选列表（细化 nodes_to_run）
       market.py           # 市场风险链路（波动率）
       concentration.py    # 集中度链路（HHI、最大权重）
