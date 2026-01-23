@@ -26,3 +26,4 @@
   uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-date <ASOF_DATE>
   ```
   `ASOF_DATE` 同上。
+  运行 `test.py` 时会自动更新 `rules.yaml` 与 `macro_series.yaml`（需配置 `TUSHARE_TOKEN`）。

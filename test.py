@@ -7,6 +7,7 @@ from typing import Dict, List
 
 from src import RiskMAS
 from src.tools.calibrate_rules import calibrate_rules
+from src.tools.calibrate_macro_series import calibrate_macro_series
 from src.tools.csv_data import previous_trading_date
 
 
@@ -22,8 +23,8 @@ def main() -> None:
     base_date = dt.date(2025, 11, 15)
     intent_date = base_date + dt.timedelta(days=1)
 
-    current_weights = _random_weights(codes, seed=11)
-    target_weights = _random_weights(codes, seed=23)
+    current_weights = _random_weights(codes, seed=28)
+    target_weights = _random_weights(codes, seed=21)
 
     intent = {
         "date": intent_date.isoformat(),
@@ -40,7 +41,9 @@ def main() -> None:
         "aum": 1000000.0,
     }
 
-    calibrate_rules(previous_trading_date(intent["date"]), len(intent["targets"]))
+    asof_date = previous_trading_date(intent["date"])
+    calibrate_rules(asof_date, len(intent["targets"]))
+    calibrate_macro_series(asof_date)
 
     mas = RiskMAS(output="table")
     result = mas.run(intent=intent, context=context)

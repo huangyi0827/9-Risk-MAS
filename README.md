@@ -53,6 +53,94 @@ uv run --env-file .env -- python -u test.py
 ```
 `test.py` 会根据交易目标 ETF 的数量自动校准 `rules.yaml`（使用交易意图日期的前一个交易日作为 `asof_date`）。
 
+### 部分输出示例
+```text
+---------------------+------------------
+ KEY                 | VALUE            
+---------------------+------------------
+ decision            | pass             
+ binding_constraints | 0                
+ recommended_actions | 0                
+ recommendation      | none             
+ llm_used            | True             
+ llm_model           | qwen3-max        
+ supervisor_used     | True             
+ trace_id            | 08a46c02b4e7cbd8 
+---------------------+------------------
+
+-----------------+----------+-----------------------
+ RISK            | SEVERITY | SUMMARY               
+-----------------+----------+-----------------------
+ market          | 0        | 组合波动率处于目标范围           
+ concentration   | 0        | 组合集中度在合理范围内           
+ diversification | 0        | 分散度较好                 
+ liquidity       | 0        | 流动性状况可接受              
+ macro           | 0        | 当前宏观环境稳定，无显著风险信号。     
+ compliance      | 0        | 当前组合调整符合合规要求，未发现重大风险。 
+-----------------+----------+-----------------------
+-------------------------------------------------------------------------------------------------------------------
+ AUDIT                | VALUE                                                                                                                                                                                                                                      
+----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+ policy_profile       | default                                                                                                                                                                                                                                    
+ ruleset_version      | rules.yaml                                                                                                                                                                                                                                 
+ llm_used             | True                                                                                                                                                                                                                                       
+ llm_model            | qwen3-max                                                                                                                                                                                                                                  
+ gatekeeper_used      | True                                                                                                                                                                                                                                       
+ gatekeeper_rationale | ok                                                                                                                                                                                                                                         
+ supervisor_used      | True                                                                                                                                                                                                                                       
+ supervisor_rationale | 数据质量整体良好，宏观数据新鲜度达标，合规文本可用，且无规则层面的违规发现。尽管组合集中度有所下降（HHI 降低、有效持仓数增加），但当前 top_weight 仍较高，需保留 concentration 和 diversification 节点以评估结构变化；liquidity 节点因加权价差和 ADV 指标存在而有必要运行；market 和 macro 节点因数据完整且为默认策略组成部分而保留；compliance 节点无异常且为默认必选，故全部节点均应运行。 
+ candidate_nodes      | market,concentration,diversification,liquidity,macro,compliance                                                                                                                                                                            
+ nodes_to_run         | market,concentration,diversification,liquidity,macro,compliance                                                                                                                                                                            
+ skills_used          | 4                                                                                                                                                                                                                                          
+ node_outputs         | 35                                                                                                                                                                                                                                         
+ tool_calls           | 3                                                                                                                                                                                                                                          
+ tool_errors          | 0                                                                                                                                                                                                                                          
+ tool_latency_ms      | 598                                                                                                                                                                                                                                        
+ timestamp            | 2026-01-23T16:14:51.993594Z                                                                                                                                                                                                                
+ trace_id             | 08a46c02b4e7cbd8                                                                                                                                                                                                                           
+----------------------+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+--------------------------+-------------+-------------+--------
+ RULE_KEY                 | VALUE       | CURRENT     | STATUS 
+--------------------------+-------------+-------------+--------
+ adv_restrict             | 12702.31067 | 25976.63354 | 达标     
+ adv_warn                 | 23293.91059 | 25976.63354 | 达标     
+ blocklist                | CCC         | none        | 达标     
+ effective_n_restrict     | 2.20007     | 4.03708     | 达标     
+ effective_n_warn         | 2.53444     | 4.03708     | 达标     
+ hhi_restrict             | 0.45453     | 0.24770     | 达标     
+ hhi_warn                 | 0.39457     | 0.24770     | 达标     
+ max_hhi                  | 0.45453     | 0.24770     | 达标     
+ max_portfolio_volatility | 0.01827     | 0.00760     | 达标     
+ max_single_weight        | 0.62922     | 0.31571     | 达标     
+ max_weighted_spread_bps  | 232.08741   | 113.38218   | 达标     
+ min_weighted_adv         | 12702.31067 | 25976.63354 | 达标     
+ spread_restrict          | 232.08741   | 113.38218   | 达标     
+ spread_warn              | 214.69789   | 113.38218   | 达标     
+ top_weight_restrict      | 0.62922     | 0.31571     | 达标     
+ top_weight_warn          | 0.55666     | 0.31571     | 达标     
+ volatility_restrict      | 0.01827     | 0.00760     | 达标     
+ volatility_warn          | 0.01691     | 0.00760     | 达标     
+--------------------------+-------------+-------------+--------
+
+---------------------------
+ NODE_OUTPUT               
+---------------------------
+ binding_constraints       
+ candidate_nodes           
+ compliance_blocklist      
+ compliance_blocklist_meta 
+ cost_budget               
+ data_gaps                 
+ data_quality              
+ decision                  
+ finding_compliance        
+ finding_concentration     
+ ...    
+ 
+---------------------------
+```
+
 ## 用户输入与可配置项说明
 
 本说明聚焦“用户可以主动输入/设定”的内容，包括：RiskMAS 调用参数、风险偏好、以及常用环境变量。
@@ -169,9 +257,9 @@ print(result)
 - 波动率口径：优先使用复权价（`adj_close = close * adj_factor`）计算收益率与波动率
 - 对指标分布取分位数生成 `warn/restrict` 阈值（高方向：90%/98%，低方向：10%/2%）
 
-更新方式：
+手动更新方式：
 ```bash
-uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <ASOF_DATE>（这里填交易意图日期的前一个交易日） --n 5
+uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <ASOF_DATE>（这里填交易意图日期的前一个交易日） --n （这里填交易意图的ETF数量）
 ```
 
 #### 5.2 macro_series.yaml（宏观阈值配置）
@@ -181,7 +269,7 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <AS
 - 若 `change_scale=bp`，将变化幅度转换为 bp
 - 对变化幅度分布取分位数生成阈值（默认 warn=90%，restrict=98%）
 
-更新方式：
+手动更新方式：
 ```bash
 uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-date <ASOF_DATE>（同上）
 ```

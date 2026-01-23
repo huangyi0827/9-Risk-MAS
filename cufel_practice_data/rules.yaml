@@ -1,40 +1,40 @@
 default:
-  max_single_weight: 0.6238119527727676
-  max_hhi: 0.44899528683437767
-  max_portfolio_volatility: 0.01977128229393197
-  max_weighted_spread_bps: 232.30459078188952
-  min_weighted_adv: 12907.854597701184
-  volatility_warn: 0.017688905908769155
-  volatility_restrict: 0.01977128229393197
-  spread_warn: 214.39020231701807
-  spread_restrict: 232.30459078188952
-  adv_warn: 23219.61844926824
-  adv_restrict: 12907.854597701184
-  hhi_warn: 0.39249399339366886
-  hhi_restrict: 0.44899528683437767
-  top_weight_warn: 0.5514443934374116
-  top_weight_restrict: 0.6238119527727676
-  effective_n_warn: 2.5478096911168717
-  effective_n_restrict: 2.2271948877904406
+  max_single_weight: 0.6292205221363144
+  max_hhi: 0.4545301467657498
+  max_portfolio_volatility: 0.01827424314151744
+  max_weighted_spread_bps: 232.08741178207288
+  min_weighted_adv: 12702.3106710312
+  volatility_warn: 0.01690564385459702
+  volatility_restrict: 0.01827424314151744
+  spread_warn: 214.69788940718692
+  spread_restrict: 232.08741178207288
+  adv_warn: 23293.910588902138
+  adv_restrict: 12702.3106710312
+  hhi_warn: 0.3945651779537312
+  hhi_restrict: 0.4545301467657498
+  top_weight_warn: 0.5566634044908717
+  top_weight_restrict: 0.6292205221363144
+  effective_n_warn: 2.5344355152195006
+  effective_n_restrict: 2.2000740938987797
   blocklist:
   - CCC
 conservative:
-  max_single_weight: 0.687348277263854
-  max_hhi: 0.5129945534471334
-  max_portfolio_volatility: 0.022131960478261162
-  max_weighted_spread_bps: 247.3880835965101
-  min_weighted_adv: 8945.644529394744
-  volatility_warn: 0.01854034379435597
-  volatility_restrict: 0.022131960478261162
-  spread_warn: 222.45345630820145
-  spread_restrict: 247.3880835965101
-  adv_warn: 18212.61050963896
-  adv_restrict: 8945.644529394744
-  hhi_warn: 0.4186675571022924
-  hhi_restrict: 0.5129945534471334
-  top_weight_warn: 0.5820711769730729
-  top_weight_restrict: 0.687348277263854
-  effective_n_warn: 2.3885299569403755
-  effective_n_restrict: 1.9493385265381462
+  max_single_weight: 0.6902591692304036
+  max_hhi: 0.5122400955549602
+  max_portfolio_volatility: 0.01951829338433322
+  max_weighted_spread_bps: 247.3010485031688
+  min_weighted_adv: 8551.696142723184
+  volatility_warn: 0.017512335515826122
+  volatility_restrict: 0.01951829338433322
+  spread_warn: 222.85571438233038
+  spread_restrict: 247.3010485031688
+  adv_warn: 17522.76597134985
+  adv_restrict: 8551.696142723184
+  hhi_warn: 0.41824649590416646
+  hhi_restrict: 0.5122400955549602
+  top_weight_warn: 0.5884146937796093
+  top_weight_restrict: 0.6902591692304036
+  effective_n_warn: 2.3909347575995725
+  effective_n_restrict: 1.952209539345411
   blocklist:
   - CCC

@@ -185,29 +185,33 @@ def _compute_changes(values: List[float], mode: str, scale: str | None) -> List[
     return changes
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Calibrate macro series thresholds from Tushare data.")
-    parser.add_argument("--asof-date", default=os.getenv("ASOF_DATE", "").strip(), help="as-of date (YYYY-MM-DD)")
-    parser.add_argument("--lookback-days", type=int, default=365 * 3, help="lookback window in days")
-    parser.add_argument("--warn-pctl", type=float, default=0.9, help="warn percentile")
-    parser.add_argument("--restrict-pctl", type=float, default=0.98, help="restrict percentile")
-    parser.add_argument("--min-samples", type=int, default=30, help="min changes required to calibrate")
-    parser.add_argument("--config", default=os.getenv("MACRO_SERIES_CONFIG", "").strip(), help="macro series config path")
-    args = parser.parse_args()
-
-    if args.asof_date:
-        asof_date = _parse_date(args.asof_date)
-    else:
-        asof_date = datetime.now(timezone.utc).replace(tzinfo=None)
-    if asof_date is None:
+def calibrate_macro_series(
+    asof_date: str,
+    *,
+    lookback_days: int | None = None,
+    warn_pctl: float | None = None,
+    restrict_pctl: float | None = None,
+    min_samples: int | None = None,
+    config_path: str | None = None,
+) -> Dict[str, Any]:
+    asof = _parse_date(asof_date)
+    if asof is None:
         raise SystemExit("invalid --asof-date")
+    if lookback_days is None:
+        lookback_days = 365 * 3
+    if warn_pctl is None:
+        warn_pctl = 0.9
+    if restrict_pctl is None:
+        restrict_pctl = 0.98
+    if min_samples is None:
+        min_samples = 30
 
     base = Path(os.getenv("CSV_DATA_DIR", "")).expanduser() if os.getenv("CSV_DATA_DIR") else Path.cwd() / "cufel_practice_data"
-    config_path = Path(args.config).expanduser() if args.config else base / "macro_series.yaml"
-    if not config_path.exists():
-        raise SystemExit(f"config not found: {config_path}")
+    resolved_path = Path(config_path).expanduser() if config_path else base / "macro_series.yaml"
+    if not resolved_path.exists():
+        raise SystemExit(f"config not found: {resolved_path}")
 
-    config = _load_config(config_path)
+    config = _load_config(resolved_path)
     series_cfg = config["series"]
     pro, client_error = _get_tushare_client()
 
@@ -218,26 +222,48 @@ def main() -> None:
         if client_error:
             updated[series] = {"error": client_error}
             continue
-        rows, err = _fetch_series(pro, series, cfg, asof_date)
+        rows, err = _fetch_series(pro, series, cfg, asof)
         if err:
             updated[series] = {"error": err}
             continue
-        rows = _filter_window(rows, asof_date, args.lookback_days)
+        rows = _filter_window(rows, asof, lookback_days)
         values = [v for _, v in rows]
         mode = str(cfg.get("change_mode") or "pct").strip().lower()
         scale = str(cfg.get("change_scale") or "").strip().lower() or None
         changes = _compute_changes(values, mode, scale)
-        if len(changes) < args.min_samples:
+        if len(changes) < min_samples:
             updated[series] = {"error": f"not enough samples: {len(changes)}"}
             continue
-        warn = _percentile(changes, args.warn_pctl)
-        restrict = _percentile(changes, args.restrict_pctl)
+        warn = _percentile(changes, warn_pctl)
+        restrict = _percentile(changes, restrict_pctl)
         cfg["warn_pct_change"] = float(warn)
         cfg["restrict_pct_change"] = float(restrict)
         updated[series] = {"warn_pct_change": warn, "restrict_pct_change": restrict, "samples": len(changes)}
 
-    config_path.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    print(json.dumps({"config_path": str(config_path), "updated": updated}, ensure_ascii=False))
+    resolved_path.write_text(yaml.safe_dump(config, allow_unicode=True, sort_keys=False), encoding="utf-8")
+    return {"config_path": str(resolved_path), "updated": updated}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Calibrate macro series thresholds from Tushare data.")
+    parser.add_argument("--asof-date", default=os.getenv("ASOF_DATE", "").strip(), help="as-of date (YYYY-MM-DD)")
+    parser.add_argument("--lookback-days", type=int, default=365 * 3, help="lookback window in days")
+    parser.add_argument("--warn-pctl", type=float, default=0.9, help="warn percentile")
+    parser.add_argument("--restrict-pctl", type=float, default=0.98, help="restrict percentile")
+    parser.add_argument("--min-samples", type=int, default=30, help="min changes required to calibrate")
+    parser.add_argument("--config", default=os.getenv("MACRO_SERIES_CONFIG", "").strip(), help="macro series config path")
+    args = parser.parse_args()
+
+    asof_date = args.asof_date or datetime.now(timezone.utc).date().isoformat()
+    result = calibrate_macro_series(
+        asof_date,
+        lookback_days=args.lookback_days,
+        warn_pctl=args.warn_pctl,
+        restrict_pctl=args.restrict_pctl,
+        min_samples=args.min_samples,
+        config_path=args.config or None,
+    )
+    print(json.dumps(result, ensure_ascii=False))
 
 
 if __name__ == "__main__":
