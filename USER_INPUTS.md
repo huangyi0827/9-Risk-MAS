@@ -28,7 +28,7 @@ intent = {
 常用字段：
 - `current_positions`：当前持仓（dict，`code -> weight`）
 - `current_positions_date`：当前持仓日期（可选，用于新鲜度检查）
-- `universe`：候选标的池（可选，不传时自动从持仓+目标合并）
+- `universe`：候选 ETF 池（可选，不传时自动从持仓+目标合并）
 - `benchmark`：基准代码（可选）
 - `policy_profile`：风险偏好配置（默认 `default`，也可用保守型 `conservative`）
 - `account_type` / `jurisdiction`：预留字段（用于将来分账户/分辖区规则）
@@ -66,11 +66,23 @@ print(result)
 - 该日期用于截断行情/宏观/合规数据，避免使用未来数据。
 - 若找不到更早交易日，则回退到 `intent.date`。
 
+## 2.1 数据质量口径（统一）
+
+- `data_quality.market`：ETF 主表缺失、行情缺失（含 missing_etf_master / missing_market）。
+- `data_quality.macro`：
+  - `timeseries_available`：是否具备宏观时序来源（`TUSHARE_TOKEN`）。
+  - `text_available`：是否具备宏观文本来源（CSV）。
+  - `latest_date / freshness_days / freshness_status`：新鲜度口径（`freshness_days = asof_date - latest_date`，future/stale/ok/unknown）。
+  - 若文本日期晚于 asof_date，写入 `data_gaps` 为 block 级别（不改变全局 status）。
+- `data_quality.compliance.text_available`：合规文本是否可用。
+- `data_quality.positions.freshness_days`：当前持仓日期的新鲜度。
+- Gatekeeper 仅在 `macro.timeseries_available` 为真时纳入宏观节点；合规模块需要 `compliance.text_available`。
+
 ## 3) 环境变量清单
 
 ### 数据与采样
 - `CSV_DATA_DIR`：CSV 数据目录（默认 `cufel_practice_data`）
-- `SAMPLE_UNIVERSE_SIZE`：随机样本标的数
+- `SAMPLE_UNIVERSE_SIZE`：随机样本 ETF 数
 - `RANDOM_SEED`：随机种子
 - `MARKET_LOOKBACK_DAYS`：行情回溯天数
 
@@ -80,8 +92,9 @@ print(result)
 - `ENABLE_SUPERVISOR`：是否启用 LLM 调度（0/1）
 
 ### 宏观时序
-- `TUSHARE_TOKEN`：Tushare Token（宏观时序查询），如果没有传入则不会调用macro_agent
+- `TUSHARE_TOKEN`：Tushare Token（宏观时序查询），缺失则宏观节点不进入候选
 - `MACRO_SERIES_CONFIG`：宏观指标配置路径（默认 `cufel_practice_data/macro_series.yaml`）
+- `MACRO_STALE_DAYS`：宏观文本数据陈旧阈值（默认 30 天）
 
 ### 组合执行与 LP
 - `AUM` / `PORTFOLIO_AUM`：组合 AUM
@@ -98,7 +111,7 @@ print(result)
 
 ### 5.1 rules.yaml（组合规则阈值）
 原理：
-- 在历史窗口内随机抽样组合：从标的池随机抽取 n 只，使用 Dirichlet(1,...,1) 生成权重
+- 在历史窗口内随机抽样组合：从 ETF 池随机抽取 n 只，使用 Dirichlet(1,...,1) 生成权重
 - 计算组合指标并形成经验分布（波动率、HHI、ADV、spread 等）
 - 对指标分布取分位数生成 `warn/restrict` 阈值（高方向：90%/98%，低方向：10%/2%）
 

@@ -19,6 +19,24 @@ _RULES_BASE = Path(os.getenv("CSV_DATA_DIR", "")).expanduser() if os.getenv("CSV
 _RULES_PATH = _RULES_BASE / "rules.yaml"
 
 
+def _env_float(name: str, default: str) -> float:
+    value = os.getenv(name, default)
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return float(default)
+
+
+def _load_blocklist(path: Path, fallback: List[str]) -> List[str]:
+    if not path.exists():
+        return list(fallback)
+    data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+    if not isinstance(data, dict):
+        return list(fallback)
+    blocklist = (data.get("default") or {}).get("blocklist") or fallback
+    return list(blocklist)
+
+
 def _percentile(values: List[float], p: float) -> float:
     if not values:
         return 0.0
@@ -158,21 +176,17 @@ def main() -> None:
     codes, metrics = _load_market_metrics_range(start_date, end_date)
     series = _simulate(codes, metrics, args.n, args.samples, args.seed)
 
-    high_warn = float(os.getenv("CALIB_WARN_PCTL", "0.8"))
-    high_restrict = float(os.getenv("CALIB_RESTRICT_PCTL", "0.9"))
-    low_warn = float(os.getenv("CALIB_LOW_WARN_PCTL", "0.2"))
-    low_restrict = float(os.getenv("CALIB_LOW_RESTRICT_PCTL", "0.1"))
+    high_warn = _env_float("CALIB_WARN_PCTL", "0.8")
+    high_restrict = _env_float("CALIB_RESTRICT_PCTL", "0.9")
+    low_warn = _env_float("CALIB_LOW_WARN_PCTL", "0.2")
+    low_restrict = _env_float("CALIB_LOW_RESTRICT_PCTL", "0.1")
 
-    chigh_warn = float(os.getenv("CALIB_CONSERVATIVE_WARN_PCTL", "0.85"))
-    chigh_restrict = float(os.getenv("CALIB_CONSERVATIVE_RESTRICT_PCTL", "0.95"))
-    clow_warn = float(os.getenv("CALIB_CONSERVATIVE_LOW_WARN_PCTL", "0.15"))
-    clow_restrict = float(os.getenv("CALIB_CONSERVATIVE_LOW_RESTRICT_PCTL", "0.05"))
+    chigh_warn = _env_float("CALIB_CONSERVATIVE_WARN_PCTL", "0.85")
+    chigh_restrict = _env_float("CALIB_CONSERVATIVE_RESTRICT_PCTL", "0.95")
+    clow_warn = _env_float("CALIB_CONSERVATIVE_LOW_WARN_PCTL", "0.15")
+    clow_restrict = _env_float("CALIB_CONSERVATIVE_LOW_RESTRICT_PCTL", "0.05")
 
-    existing = {}
-    if _RULES_PATH.exists():
-        existing = yaml.safe_load(_RULES_PATH.read_text(encoding="utf-8")) or {}
-
-    blocklist = list((existing.get("default") or {}).get("blocklist") or ["CCC"])
+    blocklist = _load_blocklist(_RULES_PATH, ["CCC"])
 
     rules = {
         "default": _build_rules(

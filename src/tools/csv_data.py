@@ -182,21 +182,6 @@ def market_metrics(
     return metrics
 
 
-def market_metrics_by_year(year: int) -> Tuple[List[str], Dict[str, Dict[str, float]]]:
-    start = f"{year}-01-01"
-    end = f"{year}-12-31"
-    df = load_etf_prices()
-    if df.empty:
-        return [], {}
-    df = df[(df["date"] >= start) & (df["date"] <= end)]
-    if df.empty:
-        return [], {}
-    codes = list(dict.fromkeys(df["code"].dropna().astype(str).tolist()))
-    metrics = market_metrics(codes, start, end)
-    codes = [c for c in codes if c in metrics]
-    return codes, metrics
-
-
 def market_metrics_by_range(start_date: str, end_date: str) -> Tuple[List[str], Dict[str, Dict[str, float]]]:
     df = load_etf_prices()
     if df.empty:
@@ -220,6 +205,19 @@ def compliance_docs_available() -> bool:
     return not df.empty
 
 
+def _text_mask(df: pd.DataFrame, query: str, columns: Iterable[str]) -> pd.Series:
+    if df.empty or not query:
+        return pd.Series([], dtype=bool)
+    q = query.lower()
+    mask = pd.Series(False, index=df.index)
+    for col in columns:
+        if col not in df.columns:
+            continue
+        series = df[col].astype(str).str.lower()
+        mask |= series.str.contains(q, na=False)
+    return mask
+
+
 def macro_search_hits(query: str, limit: int = 5, asof_date: str | None = None) -> List[Dict[str, Any]]:
     df = load_macro_docs()
     if df.empty or not query:
@@ -228,10 +226,9 @@ def macro_search_hits(query: str, limit: int = 5, asof_date: str | None = None) 
         cutoff = pd.to_datetime(asof_date, errors="coerce")
         if pd.notna(cutoff):
             df = df[df["date"] <= cutoff]
-    q = query.lower()
-    title = df.get("title", pd.Series([], dtype=str)).astype(str).str.lower()
-    content = df.get("content", pd.Series([], dtype=str)).astype(str).str.lower()
-    mask = title.str.contains(q, na=False) | content.str.contains(q, na=False)
+    mask = _text_mask(df, query, ("title", "content"))
+    if mask.empty:
+        return []
     hits = df[mask].head(limit)
     return [{"series": str(row.get("title") or "")} for _, row in hits.iterrows()]
 
@@ -240,10 +237,9 @@ def compliance_search_hits(query: str, limit: int = 5) -> List[str]:
     df = load_compliance_docs()
     if df.empty or not query:
         return []
-    q = query.lower()
-    title = df.get("title", pd.Series([], dtype=str)).astype(str).str.lower()
-    content = df.get("content", pd.Series([], dtype=str)).astype(str).str.lower()
-    mask = title.str.contains(q, na=False) | content.str.contains(q, na=False)
+    mask = _text_mask(df, query, ("title", "content"))
+    if mask.empty:
+        return []
     hits = df[mask].head(limit)
     return [str(row.get("content") or "") for _, row in hits.iterrows()]
 

@@ -6,13 +6,13 @@ inputs:
   - snapshot_metrics
   - tool_results
 outputs:
-  - compliance_finding
+  - finding_compliance
 policy_version: "local-default"
 skills_hash: ""
 evidence_prefixes:
   - snapshot_metrics.
   - rules.
-  - tool:
+  - "tool:"
 tools:
   allowlist:
     - policy_search

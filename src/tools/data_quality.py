@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Dict, Any, List
+from typing import Any, Dict, List
 
 import os
 
@@ -14,6 +14,25 @@ from .csv_data import (
     lookback_start_date,
     security_master_codes,
 )
+
+
+def _append_gap(
+    data_gaps: List[Dict[str, Any]],
+    status: str,
+    *,
+    gap_type: str,
+    severity: str,
+    message: str,
+    affect_status: bool = True,
+) -> str:
+    data_gaps.append({"type": gap_type, "severity": severity, "message": message})
+    if not affect_status:
+        return status
+    if severity == "block":
+        return "blocked"
+    if severity == "warn" and status == "ok":
+        return "degraded"
+    return status
 
 
 def check_data_quality(state: RiskState) -> Dict[str, Any]:
@@ -29,11 +48,13 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
     sec_codes, _ = security_master_codes()
     sec_checked = bool(sec_codes)
     if not sec_checked:
-        data_gaps.append(
-            {"type": "security_master", "severity": "warn", "message": "security master csv missing"}
+        status = _append_gap(
+            data_gaps,
+            status,
+            gap_type="etf_master",
+            severity="warn",
+            message="ETF master csv missing",
         )
-        if status == "ok":
-            status = "degraded"
 
     market_codes = set()
     market_checked = False
@@ -49,29 +70,25 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
     missing_market = [c for c in universe if market_checked and c not in market_codes]
 
     if missing_master:
-        data_gaps.append(
-            {
-                "type": "security_master",
-                "severity": "warn",
-                "message": f"missing security master for: {', '.join(missing_master)}",
-            }
+        status = _append_gap(
+            data_gaps,
+            status,
+            gap_type="etf_master",
+            severity="warn",
+            message=f"missing ETF master for: {', '.join(missing_master)}",
         )
-        if status == "ok":
-            status = "degraded"
     if missing_market:
-        data_gaps.append(
-            {
-                "type": "market_data",
-                "severity": "warn",
-                "message": f"missing market data for: {', '.join(missing_market)}",
-            }
+        status = _append_gap(
+            data_gaps,
+            status,
+            gap_type="market_data",
+            severity="warn",
+            message=f"missing market data for: {', '.join(missing_market)}",
         )
-        if status == "ok":
-            status = "degraded"
 
-    macro_latest = ""
     freshness_days = None
-    macro_available = bool(os.getenv("TUSHARE_TOKEN", "").strip()) or macro_docs_available()
+    timeseries_available = bool(os.getenv("TUSHARE_TOKEN", "").strip())
+    macro_text_available = macro_docs_available()
     macro_latest = macro_latest_date(asof_date or None)
 
     if asof_date and macro_latest:
@@ -82,33 +99,72 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
         except ValueError:
             freshness_days = None
 
-    compliance_available = compliance_docs_available()
+    compliance_text_available = compliance_docs_available()
 
     if missing_market and len(missing_market) == len(universe):
-        status = "blocked"
-        data_gaps.append(
-            {
-                "type": "market_data",
-                "severity": "block",
-                "message": "all universe instruments missing market data",
-            }
+        status = _append_gap(
+            data_gaps,
+            status,
+            gap_type="market_data",
+            severity="block",
+            message="all universe instruments missing market data",
         )
 
-    data_quality = {
+    macro_stale_days = int(os.getenv("MACRO_STALE_DAYS", "30"))
+    if freshness_days is None:
+        freshness_status = "unknown"
+    elif freshness_days < 0:
+        freshness_status = "future"
+    elif freshness_days > macro_stale_days:
+        freshness_status = "stale"
+    else:
+        freshness_status = "ok"
+
+    if macro_text_available and freshness_status == "future":
+        status = _append_gap(
+            data_gaps,
+            status,
+            gap_type="macro_text",
+            severity="block",
+            message=f"macro text data is from future date: {macro_latest}",
+            affect_status=False,
+        )
+    elif macro_text_available and freshness_status == "stale":
+        status = _append_gap(
+            data_gaps,
+            status,
+            gap_type="macro_text",
+            severity="warn",
+            message=f"macro text data is stale: {macro_latest}",
+            affect_status=False,
+        )
+
+    data_quality: Dict[str, Any] = {
         "status": status,
-        "missing_security_master": missing_master,
-        "missing_market": missing_market,
-        "macro_latest_date": macro_latest,
-        "macro_freshness_days": freshness_days,
-        "macro_available": macro_available,
-        "compliance_available": compliance_available,
+        "market": {
+            "missing_etf_master": missing_master,
+            "missing_market": missing_market,
+        },
+        "macro": {
+            "timeseries_available": timeseries_available,
+            "text_available": macro_text_available,
+            "latest_date": macro_latest,
+            "freshness_days": freshness_days,
+            "freshness_status": freshness_status,
+        },
+        "compliance": {
+            "text_available": compliance_text_available,
+        },
+        "positions": {
+            "freshness_days": None,
+        },
     }
     if asof_date and positions_date:
         try:
             asof = datetime.strptime(asof_date, "%Y-%m-%d")
             pos_date = datetime.strptime(positions_date, "%Y-%m-%d")
-            data_quality["positions_freshness_days"] = (asof - pos_date).days
+            data_quality["positions"]["freshness_days"] = (asof - pos_date).days
         except ValueError:
-            data_quality["positions_freshness_days"] = None
+            data_quality["positions"]["freshness_days"] = None
 
     return {"data_quality": data_quality, "data_gaps": data_gaps}

@@ -5,7 +5,6 @@ from .concentration import concentration_chain
 from .diversification import diversification_chain
 from .liquidity import liquidity_chain
 from .reducer import reducer_chain
-from .formatter import format_output
 from .supervisor import supervisor_chain
 
 __all__ = [
@@ -16,6 +15,5 @@ __all__ = [
     "diversification_chain",
     "liquidity_chain",
     "reducer_chain",
-    "format_output",
     "supervisor_chain",
 ]

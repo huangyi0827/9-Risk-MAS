@@ -7,10 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Tuple
 import tushare as ts
-try:
-    import yaml
-except ImportError as exc:  # pragma: no cover - optional dependency drift
-    raise SystemExit(f"pyyaml is required: {exc}")
+import yaml
 
 
 def _parse_date(value: Any) -> datetime | None:
@@ -54,21 +51,29 @@ def _percentile(values: List[float], p: float) -> float:
 
 def _load_config(path: Path) -> Dict[str, Any]:
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-    if isinstance(data, dict) and "series" in data:
-        return data
-    if isinstance(data, dict):
-        return {"series": data}
-    return {"series": {}}
+    if not isinstance(data, dict) or "series" not in data or not isinstance(data.get("series"), dict):
+        raise SystemExit("macro series config must include a 'series' mapping")
+    if not data["series"]:
+        raise SystemExit("macro series config 'series' is empty")
+    return data
+
+
+def _get_tushare_client() -> Tuple[Any | None, str | None]:
+    token = os.getenv("TUSHARE_TOKEN", "").strip()
+    if not token:
+        return None, "TUSHARE_TOKEN not configured"
+    ts.set_token(token)
+    return ts.pro_api(), None
 
 
 def _fetch_series(
+    pro: Any | None,
     series: str,
     config: Dict[str, Any],
     asof_date: datetime | None,
 ) -> Tuple[List[Tuple[datetime, float]], str | None]:
-    token = os.getenv("TUSHARE_TOKEN", "").strip()
-    if not token:
-        return [], "TUSHARE_TOKEN not configured"
+    if pro is None:
+        return [], "tushare client not configured"
 
     api_name = str(config.get("api") or "").strip()
     if not api_name:
@@ -88,8 +93,6 @@ def _fetch_series(
     ask_field = str(config.get("ask_field") or "").strip()
     shift_days = int(config.get("date_shift_days") or 0)
 
-    ts.set_token(token)
-    pro = ts.pro_api()
     api = getattr(pro, api_name, None)
     if api is None:
         return [], f"tushare api not found: {api_name}"
@@ -105,18 +108,11 @@ def _fetch_series(
     if df is None or getattr(df, "empty", True):
         return [], None
 
-    columns = list(getattr(df, "columns", []))
-    if not date_field:
-        for candidate in ("date", "trade_date", "month", "year", "quarter", "period"):
-            if candidate in columns:
-                date_field = candidate
-                break
+    columns = getattr(df, "columns", [])
     if not date_field or date_field not in columns:
-        return [], "date field not found"
-
+        return [], "date field is required in config"
     if not value_field and not (bid_field and ask_field):
-        numeric_cols = [c for c in columns if c != date_field]
-        value_field = numeric_cols[0] if numeric_cols else ""
+        return [], "value_field or bid_field+ask_field is required in config"
     if value_field and value_field not in columns:
         return [], f"value field not found: {value_field}"
     if bid_field and bid_field not in columns:
@@ -212,15 +208,17 @@ def main() -> None:
         raise SystemExit(f"config not found: {config_path}")
 
     config = _load_config(config_path)
-    series_cfg = config.get("series") or {}
-    if not isinstance(series_cfg, dict) or not series_cfg:
-        raise SystemExit("no macro series configured")
+    series_cfg = config["series"]
+    pro, client_error = _get_tushare_client()
 
     updated = {}
     for series, cfg in series_cfg.items():
         if not isinstance(cfg, dict):
             continue
-        rows, err = _fetch_series(series, cfg, asof_date)
+        if client_error:
+            updated[series] = {"error": client_error}
+            continue
+        rows, err = _fetch_series(pro, series, cfg, asof_date)
         if err:
             updated[series] = {"error": err}
             continue

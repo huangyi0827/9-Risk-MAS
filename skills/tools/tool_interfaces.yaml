@@ -15,7 +15,7 @@ tools:
     provenance: [source, timestamp, params_hash]
   - name: macro_search
     type: Tool
-    description: "Search macro documents."
+    description: "Search macro documents by keyword."
     owner: "risk_mas"
     tags: ["macro", "rag"]
     default_max_calls: 3
@@ -29,7 +29,7 @@ tools:
     provenance: [source, timestamp, params_hash]
   - name: policy_search
     type: Tool
-    description: "Search compliance policy snippets."
+    description: "Search compliance documents by keyword."
     owner: "risk_mas"
     tags: ["compliance", "rag"]
     default_max_calls: 3

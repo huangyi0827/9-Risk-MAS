@@ -13,7 +13,7 @@ def constraints_evaluator(state: RiskState) -> Dict[str, Any]:
     normalized = state.get("normalized") or {}
     metrics = state.get("snapshot_metrics") or {}
 
-    profile, _ = load_rules(normalized.get("policy_profile", "default"))
+    rules, _ = load_rules(normalized.get("policy_profile", "default"))
 
     findings: List[Dict[str, Any]] = []
 
@@ -31,91 +31,79 @@ def constraints_evaluator(state: RiskState) -> Dict[str, Any]:
             }
         )
 
-    max_single = float(profile.get("max_single_weight", 1.0))
-    top_weight = float(metrics.get("top_weight", 0.0))
-    if top_weight > max_single:
-        add(
-            "max_single_weight",
-            "restrict",
-            "top_weight",
-            top_weight,
-            max_single,
-            "single position exceeds maximum weight",
-        )
+    def _get_float(mapping: Dict[str, Any], key: str, default: float) -> float:
+        try:
+            return float(mapping.get(key, default))
+        except (TypeError, ValueError):
+            return float(default)
 
-    max_hhi = float(profile.get("max_hhi", 1.0))
-    hhi = float(metrics.get("hhi", 0.0))
-    if hhi > max_hhi:
-        add(
-            "max_hhi",
-            "warn",
-            "hhi",
-            hhi,
-            max_hhi,
-            "concentration exceeds target",
-        )
+    def _metric(key: str) -> float:
+        return _get_float(metrics, key, 0.0)
 
-    max_vol = float(profile.get("max_portfolio_volatility", 1.0))
-    vol = float(metrics.get("portfolio_volatility", 0.0))
-    if vol > max_vol:
-        add(
-            "max_portfolio_volatility",
-            "restrict",
-            "portfolio_volatility",
-            vol,
-            max_vol,
-            "portfolio volatility above limit",
-        )
+    def _rule(key: str, default: float) -> float:
+        return _get_float(rules, key, default)
 
-    max_spread = float(profile.get("max_weighted_spread_bps", 1.0e9))
-    spread = float(metrics.get("weighted_spread_bps", 0.0))
-    if spread > max_spread:
-        add(
-            "max_weighted_spread_bps",
-            "warn",
-            "weighted_spread_bps",
-            spread,
-            max_spread,
-            "liquidity spread above threshold",
-        )
+    def _check_max(rule_id: str, metric_key: str, limit: float, severity: str, message: str) -> None:
+        value = _metric(metric_key)
+        if value > limit:
+            add(rule_id, severity, metric_key, value, limit, message)
 
-    min_adv = float(profile.get("min_weighted_adv", 0.0))
-    adv = float(metrics.get("weighted_adv", 0.0))
-    if adv < min_adv and min_adv > 0:
-        add(
-            "min_weighted_adv",
-            "warn",
-            "weighted_adv",
-            adv,
-            min_adv,
-            "average daily value below minimum",
-        )
+    def _check_min(rule_id: str, metric_key: str, limit: float, severity: str, message: str) -> None:
+        value = _metric(metric_key)
+        if limit > 0 and value < limit:
+            add(rule_id, severity, metric_key, value, limit, message)
 
-    max_turnover = float(profile.get("max_turnover", 1.0))
-    turnover = float(metrics.get("turnover", 0.0))
-    if turnover > max_turnover:
-        add(
-            "max_turnover",
-            "warn",
-            "turnover",
-            turnover,
-            max_turnover,
-            "turnover above threshold",
-        )
+    _check_max(
+        "max_single_weight",
+        "top_weight",
+        _rule("max_single_weight", 1.0),
+        "restrict",
+        "single position exceeds maximum weight",
+    )
+    _check_max(
+        "max_hhi",
+        "hhi",
+        _rule("max_hhi", 1.0),
+        "warn",
+        "concentration exceeds target",
+    )
+    _check_max(
+        "max_portfolio_volatility",
+        "portfolio_volatility",
+        _rule("max_portfolio_volatility", 1.0),
+        "restrict",
+        "portfolio volatility above limit",
+    )
+    _check_max(
+        "max_weighted_spread_bps",
+        "weighted_spread_bps",
+        _rule("max_weighted_spread_bps", 1.0e9),
+        "warn",
+        "liquidity spread above threshold",
+    )
+    _check_min(
+        "min_weighted_adv",
+        "weighted_adv",
+        _rule("min_weighted_adv", 0.0),
+        "warn",
+        "average daily value below minimum",
+    )
+    _check_max(
+        "max_turnover",
+        "turnover",
+        _rule("max_turnover", 1.0),
+        "warn",
+        "turnover above threshold",
+    )
+    _check_max(
+        "max_position_delta",
+        "max_position_delta",
+        _rule("max_position_delta", 1.0),
+        "warn",
+        "single position change above threshold",
+    )
 
-    max_delta = float(profile.get("max_position_delta", 1.0))
-    max_position_delta = float(metrics.get("max_position_delta", 0.0))
-    if max_position_delta > max_delta:
-        add(
-            "max_position_delta",
-            "warn",
-            "max_position_delta",
-            max_position_delta,
-            max_delta,
-            "single position change above threshold",
-        )
-
-    max_adv_ratio = float(profile.get("max_adv_ratio", 1.0))
+    max_adv_ratio = _rule("max_adv_ratio", 1.0)
     adv_ratio_raw = metrics.get("max_adv_ratio")
     try:
         adv_ratio = float(adv_ratio_raw)
@@ -131,31 +119,22 @@ def constraints_evaluator(state: RiskState) -> Dict[str, Any]:
             "trade size above adv ratio threshold",
         )
 
-    max_delta_hhi = float(profile.get("max_delta_hhi", 1.0))
-    delta_hhi = float(metrics.get("delta_hhi", 0.0))
-    if delta_hhi > max_delta_hhi:
-        add(
-            "max_delta_hhi",
-            "warn",
-            "delta_hhi",
-            delta_hhi,
-            max_delta_hhi,
-            "hhi increase above threshold",
-        )
+    _check_max(
+        "max_delta_hhi",
+        "delta_hhi",
+        _rule("max_delta_hhi", 1.0),
+        "warn",
+        "hhi increase above threshold",
+    )
+    _check_max(
+        "max_delta_volatility",
+        "delta_portfolio_volatility",
+        _rule("max_delta_volatility", 1.0),
+        "warn",
+        "volatility increase above threshold",
+    )
 
-    max_delta_vol = float(profile.get("max_delta_volatility", 1.0))
-    delta_vol = float(metrics.get("delta_portfolio_volatility", 0.0))
-    if delta_vol > max_delta_vol:
-        add(
-            "max_delta_volatility",
-            "warn",
-            "delta_portfolio_volatility",
-            delta_vol,
-            max_delta_vol,
-            "volatility increase above threshold",
-        )
-
-    blocklist = set(state.get("compliance_blocklist") or profile.get("blocklist") or [])
+    blocklist = set(state.get("compliance_blocklist") or rules.get("blocklist") or [])
     target_weights = normalized.get("target_weights") or {}
     blocked = [c for c, w in target_weights.items() if c in blocklist and w > 0]
     if blocked:

@@ -6,13 +6,13 @@ inputs:
   - data_quality
   - tool_results
 outputs:
-  - macro_finding
+  - finding_macro
 policy_version: "local-default"
 skills_hash: ""
 evidence_prefixes:
   - snapshot_metrics.
   - rules.
-  - tool:
+  - "tool:"
 tools:
   allowlist:
     - macro_timeseries

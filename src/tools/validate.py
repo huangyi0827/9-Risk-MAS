@@ -18,6 +18,16 @@ def _normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
     return {k: v / total for k, v in weights.items()}
 
 
+def _coerce_weights(weights: Dict[str, Any], errors: list[str], label: str) -> Dict[str, float]:
+    coerced: Dict[str, float] = {}
+    for key, value in (weights or {}).items():
+        try:
+            coerced[key] = float(value)
+        except (TypeError, ValueError):
+            errors.append(f"{label} weight for {key} is not a number")
+    return coerced
+
+
 def _validate_date(date_str: str) -> Tuple[bool, str]:
     try:
         datetime.strptime(date_str, "%Y-%m-%d")
@@ -45,18 +55,18 @@ def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
     if mode not in {"target", "delta"}:
         errors.append("mode must be target or delta")
 
-    targets = intent.get("targets") or {}
+    targets = _coerce_weights(intent.get("targets") or {}, errors, "target")
     if not targets:
         errors.append("no targets provided")
 
-    current = context.get("current_positions") or {}
+    current = _coerce_weights(context.get("current_positions") or {}, errors, "current")
     current_positions_date = context.get("current_positions_date")
 
     if mode == "delta":
-        target_weights = {k: current.get(k, 0.0) + float(v) for k, v in targets.items()}
+        target_weights = {k: current.get(k, 0.0) + v for k, v in targets.items()}
         target_weights = _normalize_weights(target_weights)
     else:
-        target_weights = {k: float(v) for k, v in targets.items()}
+        target_weights = dict(targets)
         total = _sum_weights(target_weights)
         if abs(total - 1.0) > 1e-6:
             warnings.append("target weights do not sum to 1.0; normalized")

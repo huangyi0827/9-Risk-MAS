@@ -55,14 +55,15 @@ uv run --env-file .env -- python -u test.py
 ## 数据与配置
 ### 环境变量清单
 - `CSV_DATA_DIR`：CSV 数据目录（默认 `cufel_practice_data`）
-- `SAMPLE_UNIVERSE_SIZE`：随机样本标的数
+- `SAMPLE_UNIVERSE_SIZE`：随机样本 ETF 数
 - `RANDOM_SEED`：随机种子
 - `MARKET_LOOKBACK_DAYS`：行情回溯天数
 - `ENABLE_SUPERVISOR`：是否启用 LLM 调度
 - `OPENAI_API_KEY`：LLM API Key
 - `LLM_MODEL`：模型名称
-- `TUSHARE_TOKEN`：Tushare Token（宏观时序查询）
+- `TUSHARE_TOKEN`：Tushare Token（宏观时序查询，缺失则宏观节点不进入候选）
 - `MACRO_SERIES_CONFIG`：宏观指标配置文件路径（默认 `cufel_practice_data/macro_series.yaml`）
+- `MACRO_STALE_DAYS`：宏观文本数据陈旧阈值（默认 30 天）
 - `AUM` / `PORTFOLIO_AUM`：组合 AUM
 - `TARGET_HOLDINGS`：调仓建议的目标持仓数量
 - `LP_TURNOVER_WEIGHT`：LP 中的换手惩罚权重
@@ -84,11 +85,18 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date 202
 uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-date 2025-01-10
 ```
 
+### 数据质量口径（统一）
+- `data_quality.market`：ETF 主表/行情缺失（missing_etf_master/missing_market）。
+- `data_quality.macro`：宏观时序与文本可用性、最新日期与新鲜度。
+- `data_quality.compliance`：合规文本可用性。
+- `data_quality.positions`：当前持仓日期新鲜度。
+- Gatekeeper 仅在宏观时序可用时纳入宏观节点，合规模块需文本可用。
+
 ### 线性规划依赖
 - `cvxpy` 为可选依赖；未安装时退回启发式求解。
 
 ### 随机样例输入
-默认从数据库随机抽样 5 只标的（`SAMPLE_UNIVERSE_SIZE` 可改），生成初始持仓与交易意图。
+默认从数据库随机抽样 5 只 ETF（`SAMPLE_UNIVERSE_SIZE` 可改），生成初始持仓与交易意图。
 
 ## LLM（可选）
 - 设置 `OPENAI_API_KEY` 才会启用工具调用 Agent。
@@ -160,7 +168,7 @@ risk-mas/
     skills_runtime.py     # 读取 SKILL.md、snippets、schema 与工具白名单
     
     chains/
-      gatekeeper.py       # 确定性裁剪候选节点（数据缺失则中断）
+      gatekeeper.py       # 确定性裁剪候选节点（宏观需时序可用，合规需文本可用）
       router.py           # 路由（基于 gatekeeper 的候选 → nodes_to_run）
       supervisor.py       # LLM 调度，失效时回退到确定性候选列表（细化 nodes_to_run）
       market.py           # 市场风险链路（波动率）
@@ -176,7 +184,7 @@ risk-mas/
     
     tools/
       validate.py         # 早期输入校验与归一化（交易意图可为delta，也可为最终权重）
-      data_quality.py     # 数据可用性/缺失检测
+      data_quality.py     # 数据可用性/缺失/新鲜度口径（market/macro/compliance/positions）
       snapshot.py         # 快照指标（波动、HHI、流动性等）（将行情/宏观数据转换成统一的风险指标）
       constraints.py      # 规则评估与硬约束
       decision.py         # 决策引擎（rule_level 优先 + report_level 兜底）
@@ -190,7 +198,7 @@ risk-mas/
     rules.yaml            # 由 calibrate_rules.py 产生的规则阈值（优先使用）
     README.md             # 数据接入说明
     etf_2025_data.csv     # 行情数据
-    sampled_etf_basic.csv # 标的基础信息
+    sampled_etf_basic.csv # ETF 基础信息
     csrc_2025.csv         # 合规公告示例
     govcn_2025.csv        # 宏观文本示例
 

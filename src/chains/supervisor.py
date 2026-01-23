@@ -15,11 +15,38 @@ _BASE_PROMPT = (
     "只能从提供的候选列表中选择。"
     "始终返回 JSON，包含 keys: nodes_to_run (list of strings) 和 rationale (string)。"
     "rationale 必须为中文。"
+    "rationale 只能引用 payload 中已有的指标与结论，禁止编造具体数值；如需提及指标，优先不写具体数值。"
 )
 
 
 def _llm_model_name(llm) -> str:
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or "")
+
+
+def _unavailable_nodes(data_quality: Dict[str, Any]) -> List[str]:
+    unavailable = []
+    if not (data_quality.get("macro") or {}).get("timeseries_available", False):
+        unavailable.append("macro")
+    if not (data_quality.get("compliance") or {}).get("text_available", False):
+        unavailable.append("compliance")
+    return unavailable
+
+
+def _fallback_result(
+    candidates: List[str],
+    *,
+    used: bool,
+    rationale: str,
+    unavailable: List[str],
+) -> Dict[str, Any]:
+    if unavailable:
+        rationale = f"未纳入候选（数据不可用）：{','.join(unavailable)}"
+    return {
+        "nodes_to_run": candidates,
+        "pending_agents": candidates,
+        "supervisor_used": used,
+        "supervisor_rationale": rationale,
+    }
 
 
 def _normalize_nodes(nodes: List[str], candidates: List[str]) -> List[str]:
@@ -35,31 +62,25 @@ def supervisor_chain(state: RiskState, llm, candidates: List[str]) -> Dict[str, 
 
     enabled = os.getenv("ENABLE_SUPERVISOR", "1").strip() not in {"0", "false", "False"}
     if not enabled:
-        return {
-            "nodes_to_run": candidates,
-            "pending_agents": candidates,
-            "supervisor_used": False,
-            "supervisor_rationale": "disabled",
-        }
+        unavailable = _unavailable_nodes(state.get("data_quality") or {})
+        return _fallback_result(
+            candidates,
+            used=False,
+            rationale="disabled",
+            unavailable=unavailable,
+        )
 
     data_quality = state.get("data_quality") or {}
-    unavailable = []
-    if not data_quality.get("macro_available", False):
-        unavailable.append("macro")
-    if not data_quality.get("compliance_available", False):
-        unavailable.append("compliance")
+    unavailable = _unavailable_nodes(data_quality)
 
     # If no LLM available, fall back to candidates unchanged.
     if llm is None:
-        rationale = "llm unavailable"
-        if unavailable:
-            rationale = f"未纳入候选（数据不可用）：{','.join(unavailable)}"
-        return {
-            "nodes_to_run": candidates,
-            "pending_agents": candidates,
-            "supervisor_used": False,
-            "supervisor_rationale": rationale,
-        }
+        return _fallback_result(
+            candidates,
+            used=False,
+            rationale="llm unavailable",
+            unavailable=unavailable,
+        )
 
     skill = load_skill("supervisor-router")
     system_prompt = build_system_prompt(_BASE_PROMPT, skill)
@@ -84,27 +105,21 @@ def supervisor_chain(state: RiskState, llm, candidates: List[str]) -> Dict[str, 
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
-        rationale = "invalid json"
-        if unavailable:
-            rationale = f"未纳入候选（数据不可用）：{','.join(unavailable)}"
-        return {
-            "nodes_to_run": candidates,
-            "pending_agents": candidates,
-            "supervisor_used": True,
-            "supervisor_rationale": rationale,
-        }
+        return _fallback_result(
+            candidates,
+            used=True,
+            rationale="invalid json",
+            unavailable=unavailable,
+        )
 
     errors = validate_output(skill, parsed)
     if errors:
-        rationale = f"schema invalid: {errors}"
-        if unavailable:
-            rationale = f"未纳入候选（数据不可用）：{','.join(unavailable)}"
-        return {
-            "nodes_to_run": candidates,
-            "pending_agents": candidates,
-            "supervisor_used": True,
-            "supervisor_rationale": rationale,
-        }
+        return _fallback_result(
+            candidates,
+            used=True,
+            rationale=f"schema invalid: {errors}",
+            unavailable=unavailable,
+        )
 
     nodes = _normalize_nodes(list(parsed.get("nodes_to_run") or []), candidates)
     rationale = str(parsed.get("rationale") or "")

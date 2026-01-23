@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-import json
 import os
+from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
@@ -32,25 +32,8 @@ _RULES_BASE = Path(os.getenv("CSV_DATA_DIR", "")).expanduser() if os.getenv("CSV
 _RULES_PATH = _RULES_BASE / "rules.yaml"
 
 
-def _parse_value(raw: Any) -> Any:
-    if raw is None:
-        return None
-    if isinstance(raw, (int, float, list, dict)):
-        return raw
-    text = str(raw)
-    try:
-        return json.loads(text)
-    except json.JSONDecodeError:
-        pass
-    try:
-        if "." in text:
-            return float(text)
-        return int(text)
-    except ValueError:
-        return text
-
-
-def load_rules(profile: str) -> Tuple[Dict[str, Any], str]:
+@lru_cache(maxsize=8)
+def _load_rules_cached(profile: str) -> Tuple[Dict[str, Any], str]:
     if _RULES_PATH.exists():
         data = yaml.safe_load(_RULES_PATH.read_text(encoding="utf-8")) or {}
         if isinstance(data, dict):
@@ -61,6 +44,11 @@ def load_rules(profile: str) -> Tuple[Dict[str, Any], str]:
 
     fallback = _DEFAULT_RULES.get(profile) or _DEFAULT_RULES["default"]
     return fallback, "local-default"
+
+
+def load_rules(profile: str) -> Tuple[Dict[str, Any], str]:
+    rules, version = _load_rules_cached(profile)
+    return dict(rules), version
 
 
 def get_blocklist(profile: str) -> Tuple[list, str]:

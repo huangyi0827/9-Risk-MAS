@@ -133,14 +133,14 @@ def _solve_lp(
     profile: Dict[str, Any],
     adv_by_symbol: Dict[str, float],
     aum: Optional[float],
-) -> Tuple[Optional[Dict[str, float]], str]:
+) -> Optional[Dict[str, float]]:
     if cp is None:
-        return None, "cvxpy not available"
+        return None
 
     codes = list(dict.fromkeys(list(target_weights.keys()) + list(current_weights.keys())))
     n = len(codes)
     if n == 0:
-        return None, "empty universe"
+        return None
 
     target_vec = [float(target_weights.get(c, 0.0)) for c in codes]
     current_vec = [float(current_weights.get(c, 0.0)) for c in codes]
@@ -182,12 +182,12 @@ def _solve_lp(
     problem.solve(solver=os.getenv("LP_SOLVER") or None)
 
     if w.value is None:
-        return None, "solver failed"
+        return None
 
     raw = [max(0.0, float(v)) for v in w.value]
     total = sum(raw) or 1.0
     weights = {code: v / total for code, v in zip(codes, raw)}
-    return weights, "ok"
+    return weights
 
 
 def constraint_solver(state: RiskState) -> Dict[str, Any]:
@@ -198,7 +198,7 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
     normalized = state.get("normalized") or {}
     target_weights = {k: float(v) for k, v in (normalized.get("target_weights") or {}).items()}
     current_weights = {k: float(v) for k, v in (normalized.get("current_positions") or {}).items()}
-    profile, _ = load_rules(normalized.get("policy_profile", "default"))
+    rules, _ = load_rules(normalized.get("policy_profile", "default"))
     max_holdings = normalized.get("target_holdings")
     if max_holdings is None:
         env_holdings = os.getenv("TARGET_HOLDINGS", "").strip()
@@ -234,8 +234,8 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
     snapshot = state.get("snapshot_metrics") or {}
     adv_by_symbol = snapshot.get("adv_by_symbol") or {}
 
-    cash_symbol = str(profile.get("cash_symbol") or os.getenv("CASH_SYMBOL", "CASH")).strip() or "CASH"
-    adjusted_lp, status = _solve_lp(target_weights, current_weights, profile, adv_by_symbol, aum)
+    cash_symbol = str(rules.get("cash_symbol") or os.getenv("CASH_SYMBOL", "CASH")).strip() or "CASH"
+    adjusted_lp = _solve_lp(target_weights, current_weights, rules, adv_by_symbol, aum)
     if adjusted_lp and adjusted_lp != target_weights:
         adjusted_lp, limited = _limit_holdings(adjusted_lp, max_holdings, cash_symbol)
         rationale = "使用线性规划在约束下优化目标权重"
@@ -252,7 +252,7 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
             ]
         }
 
-    adjusted, notes = _adjust_weights(target_weights, profile, drivers)
+    adjusted, notes = _adjust_weights(target_weights, rules, drivers)
     if adjusted and adjusted != target_weights:
         adjusted, limited = _limit_holdings(adjusted, max_holdings, cash_symbol)
         rationale_parts = []
@@ -275,19 +275,19 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
         }
 
     guidance = {
-        "max_single_weight": float(profile.get("max_single_weight", 1.0)),
-        "max_hhi": float(profile.get("max_hhi", 1.0)),
-        "max_portfolio_volatility": float(profile.get("max_portfolio_volatility", 1.0)),
-        "max_weighted_spread_bps": float(profile.get("max_weighted_spread_bps", 1.0e9)),
-        "min_weighted_adv": float(profile.get("min_weighted_adv", 0.0)),
-        "hhi_restrict": float(profile.get("hhi_restrict", 0.0)),
-        "top_weight_restrict": float(profile.get("top_weight_restrict", 0.0)),
-        "effective_n_restrict": float(profile.get("effective_n_restrict", 0.0)),
-        "volatility_restrict": float(profile.get("volatility_restrict", 0.0)),
-        "spread_restrict": float(profile.get("spread_restrict", 0.0)),
-        "adv_restrict": float(profile.get("adv_restrict", 0.0)),
+        "max_single_weight": float(rules.get("max_single_weight", 1.0)),
+        "max_hhi": float(rules.get("max_hhi", 1.0)),
+        "max_portfolio_volatility": float(rules.get("max_portfolio_volatility", 1.0)),
+        "max_weighted_spread_bps": float(rules.get("max_weighted_spread_bps", 1.0e9)),
+        "min_weighted_adv": float(rules.get("min_weighted_adv", 0.0)),
+        "hhi_restrict": float(rules.get("hhi_restrict", 0.0)),
+        "top_weight_restrict": float(rules.get("top_weight_restrict", 0.0)),
+        "effective_n_restrict": float(rules.get("effective_n_restrict", 0.0)),
+        "volatility_restrict": float(rules.get("volatility_restrict", 0.0)),
+        "spread_restrict": float(rules.get("spread_restrict", 0.0)),
+        "adv_restrict": float(rules.get("adv_restrict", 0.0)),
     }
-    
+
     return {
         "recommended_actions": [
             {

@@ -3,10 +3,14 @@
   "title": "ComplianceFinding",
   "type": "object",
   "properties": {
+    "agent": {"type": "string"},
+    "risk_type": {"type": "string"},
     "severity": {"type": "integer", "minimum": 0, "maximum": 3},
     "summary": {"type": "string"},
     "policy_ids": {"type": "array", "items": {"type": "string"}},
-    "evidence": {"type": "array", "items": {"type": "object"}}
+    "evidence": {"type": "array", "items": {"type": "object"}},
+    "recommendations": {"type": "array", "items": {"type": "string"}},
+    "metrics": {"type": "object"}
   },
   "required": ["severity", "summary", "evidence"]
 }

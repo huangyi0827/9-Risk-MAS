@@ -3,8 +3,11 @@
   "title": "MacroFinding",
   "type": "object",
   "properties": {
+    "agent": {"type": "string"},
+    "risk_type": {"type": "string"},
     "severity": {"type": "integer", "minimum": 0, "maximum": 3},
     "summary": {"type": "string"},
+    "metrics": {"type": "object"},
     "evidence": {"type": "array", "items": {"type": "object"}},
     "recommendations": {"type": "array", "items": {"type": "string"}}
   },

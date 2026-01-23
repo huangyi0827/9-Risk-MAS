@@ -11,7 +11,13 @@ _LEVEL = {"pass": 0, "warn": 1, "restrict": 2, "block": 3}
 def _max_level(findings: List[Dict[str, Any]]) -> int:
     if not findings:
         return 0
-    return max(int(f.get("level") or _LEVEL.get(f.get("severity", "pass"), 0)) for f in findings)
+    levels = []
+    for f in findings:
+        level = f.get("level")
+        if level is None:
+            level = _LEVEL.get(f.get("severity", "pass"), 0)
+        levels.append(int(level))
+    return max(levels)
 
 
 def decision_engine(state: RiskState) -> Dict[str, Any]:

@@ -7,6 +7,22 @@ from ..skills_runtime import load_skill
 
 
 _DEFAULT_EVIDENCE_PREFIXES = ("snapshot_metrics.", "rules.", "tool:")
+_FINDING_KEYS = (
+    "finding_market",
+    "finding_concentration",
+    "finding_diversification",
+    "finding_liquidity",
+    "finding_macro",
+    "finding_compliance",
+)
+_AGENT_SKILLS = {
+    "MarketRiskChain": "risk-market-assessor",
+    "ConcentrationChain": "risk-market-assessor",
+    "DiversificationChain": "risk-market-assessor",
+    "LiquidityChain": "liquidity-execution-assessor",
+    "MacroToolCallingAgent": "macro-tool-calling",
+    "ComplianceToolCallingAgent": "compliance-evidence",
+}
 
 
 def _is_allowed_ref(ref: str, prefixes: tuple[str, ...]) -> bool:
@@ -46,32 +62,20 @@ def _sanitize_evidence(
 def reducer_chain(state: RiskState) -> Dict[str, Any]:
     findings: List[Finding] = []
     evidence_gaps: List[Dict[str, Any]] = []
-    skill_map = {
-        "MarketRiskChain": "risk-market-assessor",
-        "ConcentrationChain": "risk-market-assessor",
-        "DiversificationChain": "risk-market-assessor",
-        "LiquidityChain": "liquidity-execution-assessor",
-        "MacroToolCallingAgent": "macro-tool-calling",
-        "ComplianceToolCallingAgent": "compliance-evidence",
-    }
-    for key in (
-        "finding_market",
-        "finding_concentration",
-        "finding_diversification",
-        "finding_liquidity",
-        "finding_macro",
-        "finding_compliance",
-    ):
+    for key in _FINDING_KEYS:
         f = state.get(key)
         if f:
             f = dict(f)
             findings.append(f)
-            skill_name = skill_map.get(str(f.get("agent") or ""))
+            skill_name = _AGENT_SKILLS.get(str(f.get("agent") or ""))
             if skill_name:
                 spec = load_skill(skill_name)
                 evidence = f.get("evidence") or []
                 if isinstance(evidence, list):
-                    prefixes = tuple(spec.evidence_prefixes) if spec.evidence_prefixes else _DEFAULT_EVIDENCE_PREFIXES
+                    raw_prefixes = spec.evidence_prefixes or []
+                    prefixes = tuple(p for p in raw_prefixes if isinstance(p, str) and p)
+                    if not prefixes:
+                        prefixes = _DEFAULT_EVIDENCE_PREFIXES
                     evidence = _sanitize_evidence(state, evidence, evidence_gaps, prefixes)
                 else:
                     evidence = []

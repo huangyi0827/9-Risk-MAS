@@ -23,18 +23,19 @@ def audit_log(state: RiskState) -> Dict[str, Any]:
     tool_calls = []
     tool_calls.extend(state.get("tool_calls_macro") or [])
     tool_calls.extend(state.get("tool_calls_compliance") or [])
-    tool_errors = [t for t in tool_calls if t.get("error")]
     tool_latency = sum(int(t.get("latency_ms") or 0) for t in tool_calls)
+    tool_error_count = sum(1 for t in tool_calls if t.get("error"))
     llm_used = bool(
         state.get("llm_used_macro")
         or state.get("llm_used_compliance")
         or state.get("supervisor_used")
     )
-    models = []
-    for key in ("llm_model_macro", "llm_model_compliance", "supervisor_model"):
-        val = state.get(key)
-        if val and val not in models:
-            models.append(val)
+    models = [
+        state.get(key)
+        for key in ("llm_model_macro", "llm_model_compliance", "supervisor_model")
+        if state.get(key)
+    ]
+    models = list(dict.fromkeys(models))
 
     ts = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
     skill_map = {
@@ -49,6 +50,8 @@ def audit_log(state: RiskState) -> Dict[str, Any]:
     seen_skills = set()
     for key, skill_name in skill_map.items():
         if state.get(key):
+            if skill_name in seen_skills:
+                continue
             spec = load_skill(skill_name)
             if spec.name in seen_skills:
                 continue
@@ -70,7 +73,7 @@ def audit_log(state: RiskState) -> Dict[str, Any]:
         "tool_calls": tool_calls,
         "tool_call_summary": {
             "count": len(tool_calls),
-            "errors": len(tool_errors),
+            "errors": tool_error_count,
             "total_latency_ms": tool_latency,
         },
         "llm_used": llm_used,

@@ -240,8 +240,6 @@ def _macro_search_impl(query: str) -> Dict[str, Any]:
     }
 
 
-
-
 _CURRENT_ASOF_DATE = ""
 
 
@@ -357,6 +355,16 @@ def _compute_macro_severity(tool_results: Dict[str, Any]) -> int:
 def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
     normalized = state.get("normalized") or {}
     _set_asof_date(str(normalized.get("asof_date") or ""))
+    data_quality = state.get("data_quality") or {}
+    if not (data_quality.get("macro") or {}).get("timeseries_available", False):
+        snapshot = state.get("snapshot_metrics") or {}
+        return {
+            "finding_macro": _fallback_finding(int(snapshot.get("macro_severity", 0))),
+            "tool_calls_macro": [],
+            "llm_used_macro": False,
+            "llm_model_macro": "",
+            "snapshot_metrics": snapshot,
+        }
     prefetched_calls, prefetched_results = _prefetch_macro_timeseries()
     macro_severity = _compute_macro_severity(prefetched_results)
     snapshot = state.get("snapshot_metrics") or {}

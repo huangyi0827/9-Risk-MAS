@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from datetime import datetime
 from typing import Dict, Any
 
 import os
@@ -30,13 +29,14 @@ def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
     missing = [c for c in target_weights if c not in market]
 
     def _normalize(weights: Dict[str, float]) -> Dict[str, float]:
-        total = float(sum(weights.values()))
+        cleaned = {k: float(v) for k, v in weights.items()}
+        total = float(sum(cleaned.values()))
         if total <= 0:
-            return weights
-        return {k: v / total for k, v in weights.items()}
+            return cleaned
+        return {k: v / total for k, v in cleaned.items()}
 
-    target_norm = _normalize({k: float(v) for k, v in target_weights.items()})
-    current_norm = _normalize({k: float(v) for k, v in current_weights.items()})
+    target_norm = _normalize(target_weights)
+    current_norm = _normalize(current_weights)
 
     hhi = sum(float(w) ** 2 for w in target_norm.values())
     effective_n = 1.0 / hhi if hhi > 0 else 0.0

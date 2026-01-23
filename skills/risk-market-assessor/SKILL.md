@@ -5,13 +5,15 @@ inputs:
   - snapshot_metrics
   - policy_profile
 outputs:
-  - market_finding
+  - finding_market
+  - finding_concentration
+  - finding_diversification
 policy_version: "local-default"
 skills_hash: ""
 evidence_prefixes:
   - snapshot_metrics.
   - rules.
-  - tool:
+  - "tool:"
 tools:
   allowlist: []
   max_calls: 0

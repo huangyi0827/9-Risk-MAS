@@ -19,19 +19,18 @@ def gatekeeper_chain(state: RiskState) -> Dict[str, Any]:
         stop_condition = True
         rationale.append("data_quality_blocked")
 
-    candidates: List[str] = [
-        "market",
-        "concentration",
-        "diversification",
-        "liquidity",
-    ]
-    if data_quality.get("macro_available", False):
-        candidates.append("macro")
-    if data_quality.get("compliance_available", False):
-        candidates.append("compliance")
-
-    if stop_condition:
-        candidates = []
+    candidates: List[str] = []
+    if not stop_condition:
+        candidates = [
+            "market",
+            "concentration",
+            "diversification",
+            "liquidity",
+        ]
+        if (data_quality.get("macro") or {}).get("timeseries_available", False):
+            candidates.append("macro")
+        if (data_quality.get("compliance") or {}).get("text_available", False):
+            candidates.append("compliance")
 
     return {
         "candidate_nodes": candidates,
