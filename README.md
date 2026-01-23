@@ -37,6 +37,17 @@ uv run --env-file .env -- python -u -m src.app -JSON --pretty
 ENABLE_SUPERVISOR=0 uv run --env-file .env -- python -u -m src.app
 ```
 
+### 配置 .env 文件
+在项目根目录创建 `.env`，用于配置模型与数据相关参数（示例）：
+```env
+LLM_PROVIDER=openai_compatible
+OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
+LLM_MODEL=qwen3-max
+OPENAI_API_KEY=sk-*************************************
+TUSHARE_TOKEN=your_token
+```
+如不使用宏观时序（Tushare）或自定义数据目录，可省略对应项。
+
 ### 封装类使用（RiskMAS）
 项目提供 `RiskMAS` 门面类，便于以库方式调用。
 
