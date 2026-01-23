@@ -11,6 +11,7 @@
 - `sampled_etf_basic.csv`：`code`（可含其他描述字段）
 - `csrc_2025.csv`：`title, date, content, from`（合规文本）
 - `govcn_2025.csv`：`title, date, content, industry_name`（宏观文本）
+- `govcn_2025_results.json`：宏观情绪分析结果
 - `macro_series.yaml`：宏观时序配置（Tushare，可选）
 - `rules.yaml`：规则阈值文件
 

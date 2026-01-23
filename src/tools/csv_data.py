@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import random
 from functools import lru_cache
@@ -70,6 +71,60 @@ def load_compliance_docs() -> pd.DataFrame:
 
 @lru_cache(maxsize=1)
 def load_macro_docs() -> pd.DataFrame:
+    results_path = _data_dir() / "govcn_2025_results.json"
+    if results_path.exists():
+        try:
+            raw = json.loads(results_path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError):
+            raw = {}
+        items = raw.get("results") if isinstance(raw, dict) else None
+        if isinstance(items, list) and items:
+            rows = []
+            for item in items:
+                if not isinstance(item, dict):
+                    continue
+                industry_summaries = item.get("industry_signal_summaries") or []
+                industries: List[str] = []
+                bullets: List[str] = []
+                for summary in industry_summaries:
+                    if not isinstance(summary, dict):
+                        continue
+                    name = summary.get("industry_name")
+                    if name:
+                        industries.append(str(name))
+                    for key in ("daily_signal_bullet_points", "positive_signals", "negative_signals"):
+                        for bullet in summary.get(key) or []:
+                            if bullet:
+                                bullets.append(str(bullet))
+                attributions = item.get("key_policy_attributions") or []
+                events: List[str] = []
+                quotes: List[str] = []
+                for att in attributions:
+                    if not isinstance(att, dict):
+                        continue
+                    event = att.get("key_event")
+                    if event:
+                        events.append(str(event))
+                    quote = att.get("quote_text")
+                    if quote:
+                        quotes.append(str(quote))
+                rows.append(
+                    {
+                        "date": item.get("date"),
+                        "title": "; ".join(events) if events else "policy_sentiment",
+                        "content": "；".join(bullets + quotes),
+                        "industry_name": "; ".join(sorted(set(industries))),
+                        "sentiment_score": item.get("daily_macro_sentiment_score"),
+                    }
+                )
+            df = pd.DataFrame(rows)
+            if not df.empty:
+                df["date"] = pd.to_datetime(df["date"], errors="coerce")
+                for col in ("title", "content", "industry_name"):
+                    if col in df.columns:
+                        df[col] = df[col].astype(str)
+                return df
+
     path = _data_dir() / "govcn_2025.csv"
     df = _load_csv(path)
     if df.empty:
@@ -237,7 +292,28 @@ def macro_search_hits(query: str, limit: int = 5, asof_date: str | None = None) 
     if mask.empty:
         return []
     hits = df[mask].head(limit)
-    return [{"series": str(row.get("title") or "")} for _, row in hits.iterrows()]
+    results = []
+    for _, row in hits.iterrows():
+        date = row.get("date")
+        date_str = ""
+        if pd.notna(date):
+            date_str = str(date.date())
+        score = row.get("sentiment_score")
+        score_val = None
+        if score is not None and not pd.isna(score):
+            try:
+                score_val = float(score)
+            except (TypeError, ValueError):
+                score_val = None
+        results.append(
+            {
+                "date": date_str,
+                "title": str(row.get("title") or ""),
+                "summary": str(row.get("content") or "")[:200],
+                "sentiment_score": score_val,
+            }
+        )
+    return results
 
 
 def compliance_search_hits(query: str, limit: int = 5) -> List[str]:

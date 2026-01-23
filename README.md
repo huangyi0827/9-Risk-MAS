@@ -379,6 +379,7 @@ risk-mas/
     sampled_etf_basic.csv # ETF 基础信息
     csrc_2025.csv         # 合规公告示例
     govcn_2025.csv        # 宏观文本示例
+    govcn_2025_results.json # 宏观情绪分析结果（如何实现请参见NLP章节练习，本练不再赘述）
 
   skills/                 #把提示词/输出结构/工具权限/证据规则做成可配置的技能包，供 skills_runtime.py 加载
     risk-market-assessor/
