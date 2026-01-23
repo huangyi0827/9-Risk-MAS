@@ -35,7 +35,7 @@ def load_etf_prices() -> pd.DataFrame:
     df = df.copy()
     df["code"] = df["code"].astype(str)
     df["date"] = pd.to_datetime(df["date"], errors="coerce")
-    for col in ("open", "high", "low", "close", "vol", "amount"):
+    for col in ("open", "high", "low", "close", "vol", "amount", "pre_close", "change", "pct_chg", "adj_factor"):
         if col in df.columns:
             df[col] = pd.to_numeric(df[col], errors="coerce")
     df = df.dropna(subset=["date", "code"])
@@ -161,7 +161,14 @@ def market_metrics(
         return {}
 
     df = df.sort_values(["code", "date"])
-    df["ret"] = df.groupby("code")["close"].pct_change()
+    if "adj_factor" in df.columns:
+        adj_factor = pd.to_numeric(df["adj_factor"], errors="coerce")
+        adj_close = df["close"] * adj_factor
+        df["adj_close"] = adj_close.where(adj_close.notna(), df["close"])
+        price_col = "adj_close"
+    else:
+        price_col = "close"
+    df["ret"] = df.groupby("code")[price_col].pct_change()
     close = df["close"].replace(0, np.nan)
     df["spread_bps"] = (df["high"] - df["low"]) / close * 10000
 

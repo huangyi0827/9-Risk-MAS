@@ -13,7 +13,6 @@ class Context(TypedDict, total=False):
     current_positions: Dict[str, float]
     current_positions_date: str
     universe: List[str]
-    benchmark: str
     trade_calendar: str
     account_type: str
     jurisdiction: str

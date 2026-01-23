@@ -83,7 +83,6 @@ intent = {
 - `current_positions`：当前持仓（dict，`code -> weight`）
 - `current_positions_date`：当前持仓日期（可选，用于新鲜度检查）
 - `universe`：候选 ETF 池（可选，不传时自动从持仓+目标合并）
-- `benchmark`：基准代码（可选）
 - `policy_profile`：风险偏好配置（默认 `default`，也可用保守型 `conservative`）
 - `account_type` / `jurisdiction`：预留字段（用于将来分账户/分辖区规则）
 - `aum` / `portfolio_aum`：组合 AUM（用于 ADV 比例等执行类指标）
@@ -94,7 +93,6 @@ context = {
   "current_positions": {"159213": 0.2, "159959": 0.2, "511960": 0.2, "516310": 0.2, "561180": 0.2},
   "current_positions_date": "2025-11-14",
   "policy_profile": "default",
-  "benchmark": "510300",
   "aum": 1000000.0,
 }
 ```
@@ -127,7 +125,7 @@ print(result)
   - `timeseries_available`：是否具备宏观时序来源（`TUSHARE_TOKEN`）。
   - `text_available`：是否具备宏观文本来源（CSV）。
   - `latest_date / freshness_days / freshness_status`：新鲜度口径（`freshness_days = asof_date - latest_date`，future/stale/ok/unknown）。
-  - 若文本日期晚于 asof_date，写入 `data_gaps` 为 block 级别（不改变全局 status）。
+  - 若文本日期晚于 asof_date，写入 `data_gaps` 为 block 级别（防止未来信息泄露）。
 - `data_quality.compliance.text_available`：合规文本是否可用。
 - `data_quality.positions.freshness_days`：当前持仓日期的新鲜度。
 - Gatekeeper 仅在 `macro.timeseries_available` 为真时纳入宏观节点；合规模块需要 `compliance.text_available`。
@@ -167,6 +165,7 @@ print(result)
 原理：
 - 在历史窗口内随机抽样组合：从 ETF 池随机抽取 n 只，使用 Dirichlet(1,...,1) 生成权重
 - 计算组合指标并形成经验分布（波动率、HHI、ADV、spread 等）
+- 波动率口径：优先使用复权价（`adj_close = close * adj_factor`）计算收益率与波动率
 - 对指标分布取分位数生成 `warn/restrict` 阈值（高方向：90%/98%，低方向：10%/2%）
 
 更新方式：
@@ -291,6 +290,7 @@ risk-mas/
       audit.py            # 审计输出
       csv_data.py         # CSV 数据读取与指标派生
       calibrate_rules.py  # 规则校准脚本（基于市场数据+大量随机组合模拟自动生成rules.yaml 的阈值）
+      calibrate_macro_series.py # 宏观时序阈值校准脚本（基于时序变化分位数）
 
   cufel_practice_data/    # CSV 数据源（行情/合规/宏观）
     rules.yaml            # 由 calibrate_rules.py 产生的规则阈值（优先使用）

@@ -61,7 +61,6 @@ def _sample_case(profile: str) -> Dict[str, Any]:
         "current_positions": current_weights,
         "current_positions_date": asof_date,
         "universe": universe,
-        "benchmark": universe[0] if universe else "510300",
         "account_type": "brokerage",
         "jurisdiction": "CN",
         "policy_profile": profile,

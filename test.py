@@ -32,7 +32,6 @@ def main() -> None:
         "current_positions": current_weights,
         "current_positions_date": base_date.isoformat(),
         "universe": codes,
-        "benchmark": codes[0],
         "account_type": "brokerage",
         "jurisdiction": "CN",
         "policy_profile": "default",

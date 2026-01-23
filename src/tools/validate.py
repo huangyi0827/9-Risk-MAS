@@ -89,7 +89,6 @@ def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
         "current_positions_date": current_positions_date,
         "target_weights": target_weights,
         "universe": universe,
-        "benchmark": context.get("benchmark"),
         "account_type": context.get("account_type"),
         "jurisdiction": context.get("jurisdiction"),
         "policy_profile": context.get("policy_profile", "default"),

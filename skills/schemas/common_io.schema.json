@@ -18,7 +18,6 @@
         "current_positions": {"type": "object"},
         "current_positions_date": {"type": "string"},
         "universe": {"type": "array", "items": {"type": "string"}},
-        "benchmark": {"type": "string"},
         "policy_profile": {"type": "string"},
         "account_type": {"type": "string"},
         "jurisdiction": {"type": "string"},
