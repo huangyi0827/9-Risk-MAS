@@ -16,6 +16,9 @@
 - **审计**：`audit_log` 输出 hash、工具调用、skills 版本
   - 预留字段：`trade_calendar`、`account_type`、`jurisdiction`、`cost_budget`（为未来分账户/分辖区/成本控制扩展）
 
+## 框架图
+![Risk-mas框架图](Risk-mas框架图.png)
+
 ## 运行方式
 本项目采用 `src/` 布局，直接运行即可。
 
