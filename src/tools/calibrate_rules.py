@@ -159,22 +159,19 @@ def _build_rules(
     }
 
 
-def main() -> None:
-    parser = argparse.ArgumentParser(description="Calibrate rules from ETF history.")
-    parser.add_argument("--asof-date", type=str, required=True, help="calibrate with data up to this date (YYYY-MM-DD)")
-    parser.add_argument("--n", type=int, default=5, help="portfolio size")
-    parser.add_argument("--samples", type=int, default=int(os.getenv("CALIB_SAMPLES", "5000")))
-    parser.add_argument("--seed", type=str, default=os.getenv("RANDOM_SEED"))
-    args = parser.parse_args()
-
+def calibrate_rules(asof_date: str, n: int, *, samples: int | None = None, seed: str | None = None) -> Dict[str, Any]:
     try:
-        asof = datetime.strptime(args.asof_date, "%Y-%m-%d")
+        asof = datetime.strptime(asof_date, "%Y-%m-%d")
     except ValueError as exc:
         raise SystemExit(f"invalid --asof-date: {exc}") from exc
     start_date = f"{asof.year}-01-01"
-    end_date = args.asof_date
+    end_date = asof_date
+    if samples is None:
+        samples = int(os.getenv("CALIB_SAMPLES", "5000"))
+    if seed is None:
+        seed = os.getenv("RANDOM_SEED")
     codes, metrics = _load_market_metrics_range(start_date, end_date)
-    series = _simulate(codes, metrics, args.n, args.samples, args.seed)
+    series = _simulate(codes, metrics, n, samples, seed)
 
     high_warn = _env_float("CALIB_WARN_PCTL", "0.8")
     high_restrict = _env_float("CALIB_RESTRICT_PCTL", "0.9")
@@ -208,7 +205,24 @@ def main() -> None:
     }
 
     _RULES_PATH.write_text(yaml.safe_dump(rules, allow_unicode=True, sort_keys=False), encoding="utf-8")
-    print(json.dumps({"rules_path": str(_RULES_PATH), "profiles": list(rules.keys())}, ensure_ascii=False))
+    return {"rules_path": str(_RULES_PATH), "profiles": list(rules.keys())}
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Calibrate rules from ETF history.")
+    parser.add_argument("--asof-date", type=str, required=True, help="calibrate with data up to this date (YYYY-MM-DD)")
+    parser.add_argument("--n", type=int, default=5, help="portfolio size")
+    parser.add_argument("--samples", type=int, default=int(os.getenv("CALIB_SAMPLES", "5000")))
+    parser.add_argument("--seed", type=str, default=os.getenv("RANDOM_SEED"))
+    args = parser.parse_args()
+
+    result = calibrate_rules(
+        args.asof_date,
+        args.n,
+        samples=args.samples,
+        seed=args.seed,
+    )
+    print(json.dumps(result, ensure_ascii=False))
 
 
 if __name__ == "__main__":

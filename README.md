@@ -51,6 +51,7 @@ print(result)
 ```bash
 uv run --env-file .env -- python -u test.py
 ```
+`test.py` 会根据交易目标 ETF 的数量自动校准 `rules.yaml`（使用交易意图日期的前一个交易日作为 `asof_date`）。
 
 ## 用户输入与可配置项说明
 
@@ -170,7 +171,7 @@ print(result)
 
 更新方式：
 ```bash
-uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <ASOF_DATE>（这里填目标持仓日期的前一个交易日） --n 5
+uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <ASOF_DATE>（这里填交易意图日期的前一个交易日） --n 5
 ```
 
 #### 5.2 macro_series.yaml（宏观阈值配置）

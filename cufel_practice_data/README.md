@@ -1,20 +1,28 @@
-# Data Sources
+# 数据源说明
 
-This project reads market/compliance data from local CSV files under `cufel_practice_data/`.
-Set `CSV_DATA_DIR` to point to a different folder if needed.
+本项目从 `cufel_practice_data/` 读取 CSV 数据。
+如需替换目录，请设置 `CSV_DATA_DIR=/path/to/csv`。
 
-Expected files and columns:
-- `etf_2025_data.csv`: `date, code, open, high, low, close, vol, amount`
-- `sampled_etf_basic.csv`: `code` (and any descriptive fields)
-- `csrc_2025.csv`: `title, date, content, from` (compliance text)
-- `govcn_2025.csv`: `title, date, content, industry_name` (macro text)
-- `macro_series.yaml`: macro series config for Tushare (optional)
+## 文件与字段
+- `etf_2025_data.csv`  
+  - 必需字段：`date, code, open, high, low, close, vol, amount`  
+  - 可选字段：`pre_close, change, pct_chg, adj_factor`  
+  - 说明：若提供 `adj_factor`，波动率使用复权价计算。
+- `sampled_etf_basic.csv`：`code`（可含其他描述字段）
+- `csrc_2025.csv`：`title, date, content, from`（合规文本）
+- `govcn_2025.csv`：`title, date, content, industry_name`（宏观文本）
+- `macro_series.yaml`：宏观时序配置（Tushare，可选）
+- `rules.yaml`：规则阈值文件
 
-Rules:
-- Keep thresholds in `cufel_practice_data/rules.yaml`.
-
-Demo sampling:
-- `src.app` samples a random universe from `etf_2025_data.csv` when `SAMPLE_UNIVERSE_SIZE` is set.
-
-Rule calibration:
-- `python -m src.tools.calibrate_rules --year 2025 --n 5` calibrates thresholds from CSV market data and writes `cufel_practice_data/rules.yaml`.
+## 采样与校准
+- 随机样例：`src.app` 会从 `etf_2025_data.csv` 随机抽样（`SAMPLE_UNIVERSE_SIZE` 可调）
+- 规则校准：  
+  ```bash
+  uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <ASOF_DATE> --n 5
+  ```
+  `ASOF_DATE` 建议取“交易意图日期的前一个交易日”。
+- 宏观阈值校准：  
+  ```bash
+  uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-date <ASOF_DATE>
+  ```
+  `ASOF_DATE` 同上。

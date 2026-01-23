@@ -6,6 +6,8 @@ import random
 from typing import Dict, List
 
 from src import RiskMAS
+from src.tools.calibrate_rules import calibrate_rules
+from src.tools.csv_data import previous_trading_date
 
 
 def _random_weights(codes: List[str], seed: int) -> Dict[str, float]:
@@ -37,6 +39,8 @@ def main() -> None:
         "policy_profile": "default",
         "aum": 1000000.0,
     }
+
+    calibrate_rules(previous_trading_date(intent["date"]), len(intent["targets"]))
 
     mas = RiskMAS(output="table")
     result = mas.run(intent=intent, context=context)
