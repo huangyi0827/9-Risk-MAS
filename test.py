@@ -20,8 +20,8 @@ def main() -> None:
     base_date = dt.date(2025, 11, 15)
     intent_date = base_date + dt.timedelta(days=1)
 
-    current_weights = _random_weights(codes, seed=7)
-    target_weights = _random_weights(codes, seed=19)
+    current_weights = _random_weights(codes, seed=11)
+    target_weights = _random_weights(codes, seed=23)
 
     intent = {
         "date": intent_date.isoformat(),
