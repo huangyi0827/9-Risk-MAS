@@ -111,16 +111,7 @@ uv run --env-file .env -- python -u test.py
  hhi_restrict             | 0.45453     | 0.24770     | 达标     
  hhi_warn                 | 0.39457     | 0.24770     | 达标     
  max_hhi                  | 0.45453     | 0.24770     | 达标     
- max_portfolio_volatility | 0.01827     | 0.00760     | 达标     
- max_single_weight        | 0.62922     | 0.31571     | 达标     
- max_weighted_spread_bps  | 232.08741   | 113.38218   | 达标     
- min_weighted_adv         | 12702.31067 | 25976.63354 | 达标     
- spread_restrict          | 232.08741   | 113.38218   | 达标     
- spread_warn              | 214.69789   | 113.38218   | 达标     
- top_weight_restrict      | 0.62922     | 0.31571     | 达标     
- top_weight_warn          | 0.55666     | 0.31571     | 达标     
- volatility_restrict      | 0.01827     | 0.00760     | 达标     
- volatility_warn          | 0.01691     | 0.00760     | 达标     
+ ...
 --------------------------+-------------+-------------+--------
 
 ---------------------------
@@ -133,11 +124,8 @@ uv run --env-file .env -- python -u test.py
  cost_budget               
  data_gaps                 
  data_quality              
- decision                  
- finding_compliance        
- finding_concentration     
+ decision                     
  ...    
- 
 ---------------------------
 ```
 
