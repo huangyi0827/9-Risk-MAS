@@ -214,31 +214,19 @@ print(mas.run(intent=intent, context=context))
 - `cvxpy` 为可选依赖；未安装时退回启发式求解。
 
 ## 迁移指南（适配新数据源/资产类型）
-1) 数据源适配  
-   - 准备 CSV 文件并对齐字段：  
-     - 行情：`date, code, open, high, low, close, amount`  
-     - 合规文本：`title, date, content`  
-     - 宏观文本（可选）：`title, date, content`  
-   - 字段不一致时，修改 `src/tools/csv_data.py` 的解析逻辑  
+1) 数据源与字段对齐  
+   - 按“用户输入与可配置项说明”的字段口径准备 CSV  
+   - 若字段不一致，修改 `src/tools/csv_data.py` 的解析逻辑  
 
-2) 指标口径对齐  
-   - 明确波动率是否年化  
-   - 明确 `spread_bps` 的计算方式（建议用真实 bid-ask spread）  
-   - 若有 AUM，接入以计算 `ADV 比例` 等执行类指标
+2) 阈值与校准  
+   - 组合阈值：`cufel_practice_data/rules.yaml`  
 
-3) 规则阈值校准  
-   - 修改 `cufel_practice_data/rules.yaml` 或运行校准脚本：  
-     ```bash
-     uv run --env-file .env -- python -u -m src.tools.calibrate_rules --year 2025 --n 5
-     ```
+3) Skills 与工具权限  
+   - 调整 `skills/*/SKILL.md` 的 allowlist/snippets/schema 与 evidence_prefixes  
+   - 确保 `skills/tools/tool_interfaces.yaml` 与实际工具一致  
 
-4) Skills 与工具权限  
-   - 调整 `skills/*/SKILL.md` 中的 allowlist/snippets/schema  
-   - 确保工具注册表 `skills/tools/tool_interfaces.yaml` 与实际工具一致
-
-5) 审计与输出  
-   - 保持 `audit` 结构一致，方便跨系统对账与复现  
-   - 若需要最小输出，可只保留表格视图
+4) 审计与输出  
+   - 保持 `audit` 结构一致，便于对账与复现  
 
 
 
