@@ -36,3 +36,6 @@ snippets:
 要求：
 - 仅在必要时调用工具。
 - 证据必须引用工具输出或 state 指标。
+- 若 `macro_severity >= 1` 或 `macro_timeseries` 出现陈旧/缺失值，应调用 `macro_search` 获取上下文。
+- 输出必须为单个 JSON，对象字段名使用英文 key：`severity`、`summary`、`evidence`、`recommendations`。
+- 所有自然语言字段必须为中文。

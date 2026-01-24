@@ -37,3 +37,5 @@ snippets:
 要求：
 - 仅引用带 provenance 的工具输出或明确的规则引用。
 - 有 policy_ids 时必须给出。
+- 输出必须为单个 JSON，对象字段名使用英文 key：`severity`、`summary`、`evidence`、`recommendations`、`policy_ids`。
+- 所有自然语言字段必须为中文。

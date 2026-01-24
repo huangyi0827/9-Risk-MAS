@@ -312,6 +312,52 @@ def _coerce_float(value: Any) -> float | None:
         return None
 
 
+def _nlp_severity_from_score(score: float | None) -> int:
+    if score is None:
+        return 0
+    if score >= 70:
+        return 2
+    if score >= 60:
+        return 1
+    if score >= 40:
+        return 0
+    if score >= 30:
+        return 1
+    return 2
+
+
+def _nlp_severity_from_tool_calls(tool_calls: List[Dict[str, Any]]) -> int | None:
+    found = False
+    severity = 0
+    for call in tool_calls:
+        if call.get("tool") != "macro_search":
+            continue
+        output = call.get("output")
+        if not isinstance(output, dict):
+            continue
+        hits = output.get("hits") or []
+        if not isinstance(hits, list):
+            continue
+        for hit in hits:
+            if not isinstance(hit, dict):
+                continue
+            score = _coerce_float(hit.get("sentiment_score"))
+            if score is None:
+                continue
+            found = True
+            severity = max(severity, _nlp_severity_from_score(score))
+    if not found:
+        return None
+    return severity
+
+
+def _blend_severity(macro_severity: int, nlp_severity: int | None) -> int:
+    if nlp_severity is None:
+        return int(macro_severity)
+    blended = round(0.7 * float(macro_severity) + 0.3 * float(nlp_severity))
+    return max(0, min(3, int(blended)))
+
+
 def _compute_macro_severity(tool_results: Dict[str, Any]) -> int:
     series_results = tool_results.get("macro_timeseries") or {}
     if not isinstance(series_results, dict):
@@ -370,6 +416,7 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
     snapshot = state.get("snapshot_metrics") or {}
     updated_snapshot = dict(snapshot)
     updated_snapshot["macro_severity"] = macro_severity
+    updated_snapshot["macro_severity_timeseries"] = macro_severity
 
     if llm is None:
         return {
@@ -416,20 +463,44 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
     errors = validate_output(skill, parsed)
     if errors:
         tool_calls.append({"tool": "schema_validation", "errors": errors, "skill": skill.name})
+        nlp_severity = _nlp_severity_from_tool_calls(tool_calls)
+        final_severity = _blend_severity(macro_severity, nlp_severity)
+        final_snapshot = dict(updated_snapshot)
+        if nlp_severity is not None:
+            final_snapshot["macro_nlp_severity"] = nlp_severity
+        final_snapshot["macro_severity_final"] = final_severity
+        final_snapshot["macro_severity"] = final_severity
         return {
-            "finding_macro": _fallback_finding(macro_severity),
+            "finding_macro": _fallback_finding(final_severity),
             "tool_calls_macro": tool_calls,
             "llm_used_macro": True,
             "llm_model_macro": llm_model,
-            "snapshot_metrics": updated_snapshot,
+            "snapshot_metrics": final_snapshot,
         }
+
+    nlp_severity = _nlp_severity_from_tool_calls(tool_calls)
+    final_severity = _blend_severity(macro_severity, nlp_severity)
+    final_snapshot = dict(updated_snapshot)
+    if nlp_severity is not None:
+        final_snapshot["macro_nlp_severity"] = nlp_severity
+    final_snapshot["macro_severity_final"] = final_severity
+    final_snapshot["macro_severity"] = final_severity
+
+    metrics = parsed.get("metrics") if isinstance(parsed, dict) else {}
+    if not isinstance(metrics, dict):
+        metrics = {}
+    metrics["macro_severity_timeseries"] = macro_severity
+    if nlp_severity is not None:
+        metrics["macro_nlp_severity"] = nlp_severity
+    metrics["macro_severity_final"] = final_severity
 
     finding: Finding = {
         "agent": "MacroToolCallingAgent",
         "risk_type": "macro",
-        "severity": int(parsed.get("severity", 0)),
+        "severity": int(final_severity),
         "summary": parsed.get("summary", ""),
         "evidence": parsed.get("evidence", []),
+        "metrics": metrics,
         "recommendations": parsed.get("recommendations", []),
     }
 
@@ -438,5 +509,5 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
         "tool_calls_macro": tool_calls,
         "llm_used_macro": True,
         "llm_model_macro": llm_model,
-        "snapshot_metrics": updated_snapshot,
+        "snapshot_metrics": final_snapshot,
     }
