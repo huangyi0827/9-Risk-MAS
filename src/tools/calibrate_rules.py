@@ -178,10 +178,10 @@ def calibrate_rules(asof_date: str, n: int, *, samples: int | None = None, seed:
     low_warn = _env_float("CALIB_LOW_WARN_PCTL", "0.2")
     low_restrict = _env_float("CALIB_LOW_RESTRICT_PCTL", "0.1")
 
-    chigh_warn = _env_float("CALIB_CONSERVATIVE_WARN_PCTL", "0.85")
-    chigh_restrict = _env_float("CALIB_CONSERVATIVE_RESTRICT_PCTL", "0.95")
-    clow_warn = _env_float("CALIB_CONSERVATIVE_LOW_WARN_PCTL", "0.15")
-    clow_restrict = _env_float("CALIB_CONSERVATIVE_LOW_RESTRICT_PCTL", "0.05")
+    chigh_warn = _env_float("CALIB_CONSERVATIVE_WARN_PCTL", "0.75")
+    chigh_restrict = _env_float("CALIB_CONSERVATIVE_RESTRICT_PCTL", "0.85")
+    clow_warn = _env_float("CALIB_CONSERVATIVE_LOW_WARN_PCTL", "0.3")
+    clow_restrict = _env_float("CALIB_CONSERVATIVE_LOW_RESTRICT_PCTL", "0.2")
 
     blocklist = _load_blocklist(_RULES_PATH, ["CCC"])
 

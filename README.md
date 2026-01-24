@@ -375,7 +375,7 @@ risk-mas/
       snapshot.py         # 快照指标（波动、HHI、流动性等）（将行情/宏观数据转换成统一的风险指标）
       constraints.py      # 规则评估与硬约束
       decision.py         # 决策引擎（rule_level 优先 + report_level 兜底）
-      solver.py           # 约束求解与调整建议
+      solver.py           # 约束求解与调整建议（目标持仓的种类数与输入的交易意图一致）
       rules.py            # 规则加载（rules.yaml）
       audit.py            # 审计输出
       csv_data.py         # CSV 数据读取与指标派生
