@@ -16,7 +16,7 @@ from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
 from ..state import RiskState, Finding
 from ..tools.csv_data import macro_search_hits
 from ..skills_runtime import load_skill, build_system_prompt, filter_tools, validate_output
-
+import tushare as ts
 
 def _provenance(source: str, params: Dict[str, Any]) -> Dict[str, Any]:
     payload = json.dumps(params, sort_keys=True, separators=(",", ":"))
@@ -81,10 +81,6 @@ def _tushare_timeseries_from_config(series: str, config: Dict[str, Any]) -> Tupl
     token = os.getenv("TUSHARE_TOKEN", "").strip()
     if not token:
         raise SystemExit("TUSHARE_TOKEN not configured")
-    try:
-        import tushare as ts  # type: ignore
-    except Exception as exc:  # pragma: no cover - optional dependency
-        raise SystemExit(f"tushare unavailable: {exc!r}")
 
     api_name = str(config.get("api") or "").strip()
     if not api_name:
