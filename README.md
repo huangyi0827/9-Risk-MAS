@@ -1,20 +1,18 @@
 # 风控 MAS
 
-## 项目概述
-本仓库演示一个模块化风控服务：显式 State + 确定性工具 + 工具调用型 Agent + 审计。目的是把复杂决策拆成清晰的流水线：
-- 校验与确定性工具
-- 路由 + 分析链路 + 工具调用 Agent
-- 汇总 + 决策 + 约束求解
-- 可审计输出与溯源
+## 项目简介
+基于 LangChain、LangGraph 构建的 ETF 风控 MAS，覆盖输入规范化、指标快照、编排调度与结论输出，支持接入宏观时序与政策、合规文本数据，产出可审计的风险结论与调仓建议。
 
-## 核心结构
-- **显式 State**：`src/state.py`，每个节点只写自己的 slot
-- **确定性工具**：`src/tools/*`，校验、数据质量、快照、规则、决策
-- **路由/链路**：`src/chains/*`，包含 gatekeeper、router、supervisor
-- **工具调用 Agent**：`src/agents/*`，按技能与工具白名单执行
-- **Skills 运行时**：`src/skills_runtime.py`，加载 `SKILL.md`、snippet、schema
-- **审计**：`audit_log` 输出 hash、工具调用、skills 版本
-  - 预留字段：`trade_calendar`、`account_type`、`jurisdiction`、`cost_budget`（为未来分账户/分辖区/成本控制扩展）
+
+## 功能特性
+- 基于 LangGraph 的风控编排与路由
+- 显式 State 与确定性指标快照
+- 市场/集中/分散/流动性四条分析链路
+- 宏观与合规分析支持工具调用，按白名单控制可用工具范围
+- 决策以硬规则优先，结合风险报告给出放行/预警/限制/阻断与调仓建议
+- Skills 体系支持提示词、输出结构与证据规则的可配置化
+- 审计与可追溯输出
+
 
 ## 框架图
 ![Risk-mas框架图](Risk-mas框架图.png)
@@ -259,10 +257,6 @@ print(result)
 | `LP_TURNOVER_WEIGHT` | `0.1` | LP 中换手惩罚权重 |
 | `LP_SOLVER` | 空 | LP 求解器名称（如 `ECOS` / `OSQP`） |
 
-### 4) 风险偏好（policy_profile）
-
-- 通过 `context.policy_profile` 选择：`default` 或 `conservative`
-- 规则来源：`cufel_practice_data/rules.yaml`
 
 ### 5) 阈值文件说明（原理与更新方式）
 
