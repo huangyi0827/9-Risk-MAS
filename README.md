@@ -149,10 +149,11 @@ uv run --env-file .env -- python -u test.py
 ### 1) RiskMAS 的调用参数
 
 #### 1.1 intent（交易意图）
-必填字段：
-- `date`：交易意图日期，格式 `YYYY-MM-DD`
-- `mode`：`target` 或 `delta`
-- `targets`：目标权重或增量权重（dict，`code -> weight`）
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `date` | 是 | 交易意图日期，格式 `YYYY-MM-DD` |
+| `mode` | 是 | `target` 或 `delta` |
+| `targets` | 是 | 目标权重或增量权重（dict，`code -> weight`） |
 
 行为说明：
 - `mode=target`：直接使用 `targets` 作为目标权重
@@ -169,13 +170,14 @@ intent = {
 ```
 
 #### 1.2 context（组合上下文）
-常用字段：
-- `current_positions`：当前持仓（dict，`code -> weight`）
-- `current_positions_date`：当前持仓日期（可选，用于新鲜度检查）
-- `universe`：候选 ETF 池（可选，不传时自动从持仓+目标合并）
-- `policy_profile`：风险偏好配置（默认 `default`，也可用保守型 `conservative`）
-- `account_type` / `jurisdiction`：预留字段（用于将来分账户/分辖区规则）
-- `aum` / `portfolio_aum`：组合 AUM（用于 ADV 比例等执行类指标）
+| 字段 | 必填 | 说明 |
+| --- | --- | --- |
+| `current_positions` | 否 | 当前持仓（dict，`code -> weight`） |
+| `current_positions_date` | 否 | 当前持仓日期（用于新鲜度检查） |
+| `universe` | 否 | 候选 ETF 池（不传时自动从持仓+目标合并） |
+| `policy_profile` | 否 | 风险偏好（`default` / `conservative`） |
+| `account_type` / `jurisdiction` | 否 | 预留字段（用于将来分账户/分辖区规则） |
+| `aum` / `portfolio_aum` | 否 | 组合 AUM（用于 ADV 比例等执行类指标） |
 
 示例：
 ```python
@@ -188,10 +190,12 @@ context = {
 ```
 
 #### 1.3 RiskMAS 构造参数
-- `llm`：可直接传入 LLM 实例（不传则按环境变量加载）
-- `output`：`table` 或 `json`，决定返回表格还是 JSON 字符串，后者包含完整审计与细节字段
-- `pretty`：JSON 是否美化（pretty=True：带缩进/换行，便于阅读；pretty=False：紧凑单行，便于传输与存储；默认 `False`）
-- `use_env_llm`：是否从环境变量读取 LLM 配置（默认 `True`）
+| 参数 | 默认 | 说明 |
+| --- | --- | --- |
+| `llm` | `None` | 可直接传入 LLM 实例（不传则按环境变量加载） |
+| `output` | `table` | `table` 或 `json`，决定返回表格还是 JSON 字符串 |
+| `pretty` | `False` | JSON 是否美化（带缩进/换行） |
+| `use_env_llm` | `True` | 是否从环境变量读取 LLM 配置 |
 
 示例：
 ```python
@@ -210,39 +214,50 @@ print(result)
 
 ### 2.1 数据质量口径
 
-- `data_quality.market`：ETF 主表缺失、行情缺失（含 missing_etf_master / missing_market）。
-- `data_quality.macro`：
-  - `timeseries_available`：是否具备宏观时序来源（`TUSHARE_TOKEN`）。
-  - `text_available`：是否具备宏观文本来源（CSV）。
-  - `latest_date / freshness_days / freshness_status`：新鲜度口径（`freshness_days = asof_date - latest_date`，future/stale/ok/unknown）。
-  - 若文本日期晚于 asof_date，写入 `data_gaps` 为 block 级别（防止未来信息泄露）。
-- `data_quality.compliance.text_available`：合规文本是否可用。
-- `data_quality.positions.freshness_days`：当前持仓日期的新鲜度。
+| 口径 | 字段 | 说明 |
+| --- | --- | --- |
+| market | `missing_etf_master` / `missing_market` | ETF 主表缺失、行情缺失 |
+| macro | `timeseries_available` | 是否具备宏观时序来源（`TUSHARE_TOKEN`） |
+| macro | `text_available` | 是否具备宏观文本来源（CSV） |
+| macro | `latest_date` / `freshness_days` / `freshness_status` | 新鲜度口径（`freshness_days = asof_date - latest_date`） |
+| compliance | `text_available` | 合规文本是否可用 |
+| positions | `freshness_days` | 当前持仓日期新鲜度 |
+
+补充规则：
+- 若宏观文本日期晚于 asof_date，会写入 `data_gaps` 为 block（防止未来信息泄露）。
 - Gatekeeper 仅在 `macro.timeseries_available` 为真时纳入宏观节点；合规模块需要 `compliance.text_available`。
 
 ### 3) 环境变量清单
 
 #### 数据与采样
-- `CSV_DATA_DIR`：CSV 数据目录（默认 `cufel_practice_data`）
-- `SAMPLE_UNIVERSE_SIZE`：随机样本 ETF 数
-- `RANDOM_SEED`：随机种子
-- `MARKET_LOOKBACK_DAYS`：行情回溯天数
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `CSV_DATA_DIR` | `cufel_practice_data` | CSV 数据目录 |
+| `SAMPLE_UNIVERSE_SIZE` | `5` | 随机样本 ETF 数 |
+| `RANDOM_SEED` | 空 | 随机种子 |
+| `MARKET_LOOKBACK_DAYS` | `60` | 行情回溯天数 |
 
 #### LLM
-- `OPENAI_API_KEY`：LLM API Key
-- `LLM_MODEL`：模型名称
-- `ENABLE_SUPERVISOR`：是否启用 LLM 调度（0/1）
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | 空 | LLM API Key |
+| `LLM_MODEL` | `gpt-4o-mini` | 模型名称 |
+| `ENABLE_SUPERVISOR` | `1` | 是否启用 LLM 调度（0/1） |
 
 #### 宏观时序
-- `TUSHARE_TOKEN`：Tushare Token（宏观时序查询），缺失则宏观节点不进入候选
-- `MACRO_SERIES_CONFIG`：宏观指标配置路径（默认 `cufel_practice_data/macro_series.yaml`）
-- `MACRO_STALE_DAYS`：宏观文本数据陈旧阈值（默认 30 天）
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `TUSHARE_TOKEN` | 空 | Tushare Token（缺失则宏观节点不进入候选） |
+| `MACRO_SERIES_CONFIG` | `cufel_practice_data/macro_series.yaml` | 宏观指标配置路径 |
+| `MACRO_STALE_DAYS` | `30` | 宏观文本数据陈旧阈值 |
 
 #### 组合执行与 LP
-- `AUM` / `PORTFOLIO_AUM`：组合 AUM
-- `TARGET_HOLDINGS`：调仓建议目标持仓数量
-- `LP_TURNOVER_WEIGHT`：LP 中换手惩罚权重
-- `LP_SOLVER`：LP 求解器名称（如 `ECOS` / `OSQP`）
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `AUM` / `PORTFOLIO_AUM` | 空 | 组合 AUM |
+| `TARGET_HOLDINGS` | 空 | 调仓建议目标持仓数量 |
+| `LP_TURNOVER_WEIGHT` | `0.1` | LP 中换手惩罚权重 |
+| `LP_SOLVER` | 空 | LP 求解器名称（如 `ECOS` / `OSQP`） |
 
 ### 4) 风险偏好（policy_profile）
 
