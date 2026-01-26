@@ -11,16 +11,19 @@
 - 理解 LangGraph 并行执行机制
 
 ### 你需要完成的模块
-- 状态板块：`src/state.py`
-- 输入规范化：`src/tools/validate.py`
-- 数据与指标：`src/tools/utils.py` / `src/tools/csv_data.py` / `src/tools/data_quality.py` / `src/tools/snapshot.py`
-- 编排与汇总：`src/graph.py` / `src/chains/gatekeeper.py` / `src/chains/supervisor.py` / `src/chains/reducer.py`
-- 分析链路：`src/chains/market.py` / `src/chains/concentration.py` / `src/chains/diversification.py` / `src/chains/liquidity.py`
-- Agent + Tool（必做）：`src/agents/macro_agent.py` / `src/agents/agent_utils.py` / `src/agents/prompts.py`
-- 阈值板块：`src/tools/calibrate_rules.py` / `src/tools/calibrate_macro_series.py`
-- 规则与决策：`src/tools/decision.py` / `src/tools/solver.py`
-- Skills：`skills/macro-tool-calling/SKILL.md` / `skills/macro-tool-calling/output.schema.json` / `skills/snippets/*` / `skills/tools/tool_interfaces.yaml` / `src/skills_runtime.py`
-- 审计与可追溯：`src/tools/audit.py`
+
+| 模块 | 需要完成的文件 |
+| --- | --- |
+| 状态板块 | `src/state.py` |
+| 输入规范化 | `src/tools/validate.py` |
+| 数据与指标 | `src/tools/utils.py` / `src/tools/csv_data.py` / `src/tools/data_quality.py` / `src/tools/snapshot.py` |
+| 编排与汇总 | `src/graph.py` / `src/chains/gatekeeper.py` / `src/chains/supervisor.py` / `src/chains/reducer.py` |
+| 分析链路 | `src/chains/market.py` / `src/chains/concentration.py` / `src/chains/diversification.py` / `src/chains/liquidity.py` |
+| Agent + Tool（必做） | `src/agents/macro_agent.py` / `src/agents/agent_utils.py` / `src/agents/prompts.py` |
+| 阈值板块 | `src/tools/calibrate_rules.py` / `src/tools/calibrate_macro_series.py` |
+| 规则与决策 | `src/tools/decision.py` / `src/tools/solver.py` |
+| Skills | `skills/macro-tool-calling/SKILL.md` / `skills/macro-tool-calling/output.schema.json` / `skills/snippets/*` / `skills/tools/tool_interfaces.yaml` / `src/skills_runtime.py` |
+| 审计与可追溯 | `src/tools/audit.py` |
 
 ### 输入
 上游输入包含：当前持仓、交易意图、组合上下文、AUM 等（由 `app.py` 或测试脚本提供）。
