@@ -22,7 +22,9 @@ def _load_llm():
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key or ChatOpenAI is None:
         return None
-    model = os.getenv("LLM_MODEL", "gpt-4o-mini")
+    model = os.getenv("LLM_MODEL", "").strip()
+    if not model:
+        return None
     return ChatOpenAI(model=model, temperature=0)
 
 

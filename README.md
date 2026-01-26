@@ -44,7 +44,8 @@ LLM_MODEL=qwen3-max
 OPENAI_API_KEY=sk-*************************************
 TUSHARE_TOKEN=your_token
 ```
-如不使用宏观时序（Tushare）或自定义数据目录，可省略对应项。
+如未设置 `LLM_MODEL`，则默认不启用 LLM；
+如未使用宏观时序（未设置Tushare的token），则默认不使用宏观风控agent。
 
 ### 封装类使用（RiskMAS）
 项目提供 `RiskMAS` 门面类，便于以库方式调用。
@@ -239,7 +240,7 @@ print(result)
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | 空 | LLM API Key |
-| `LLM_MODEL` | `gpt-4o-mini` | 模型名称 |
+| `LLM_MODEL` | 空 | 模型名称（未设置则不启用 LLM） |
 | `ENABLE_SUPERVISOR` | `1` | 是否启用 LLM 调度（0/1） |
 
 #### 宏观时序
