@@ -5,10 +5,10 @@
 
 
 ## 功能特性
-- 基于 LangGraph 的风控编排与路由
+- 基于 LangGraph 的风控编排与**并行执行**
 - 显式 State 与确定性指标快照
 - 市场/集中/分散/流动性四条分析链路
-- 宏观与合规分析支持工具调用，按白名单控制可用工具范围
+- 宏观与合规分析支持工具调用，按白名单控制可用工具范围（**线程安全设计**）
 - 决策以硬规则优先，结合风险报告给出放行/预警/限制/阻断与调仓建议
 - Skills 体系支持提示词、输出结构与证据规则的可配置化
 - 审计与可追溯输出
@@ -311,6 +311,7 @@ print(mas.run(intent=intent, context=context))
 ## 线性规划依赖
 - `cvxpy` 为可选依赖；未安装时退回启发式求解。
 
+
 ## 迁移指南（适配新数据源/资产类型）
 1) 数据源与字段对齐  
    - 按“用户输入与可配置项说明”的字段口径准备 CSV  
@@ -333,12 +334,14 @@ print(mas.run(intent=intent, context=context))
 risk-mas/
   src/
     app.py                # CLI 入口：执行单次风控并输出表格/JSON
-    graph.py              # LangGraph 编排（gatekeeper → router → supervisor → 各节点）
+    graph.py              # LangGraph 编排（gatekeeper → supervisor → 并行分析节点 → reducer）
     state.py              # 显式 State 定义
+    config.py             # 集中化配置管理
     skills_runtime.py     # 读取 SKILL.md、snippets、schema 与工具白名单
     chains/               # 分析链路（market/concentration/diversification/liquidity 等）
     agents/               # 工具调用型 Agent（macro/compliance）
     tools/                # 确定性工具（校验、数据质量、快照、规则、决策、审计）
+      utils.py            # 共享工具函数（normalize_weights, compute_hhi 等）
 
   cufel_practice_data/    # CSV 数据源（可用 CSV_DATA_DIR 指定）
     rules.yaml            # 本地规则阈值（优先使用）
@@ -360,25 +363,27 @@ risk-mas/
 
   src/
     app.py                # CLI 入口：执行单次风控并输出表格/JSON
-    graph.py              # LangGraph 编排（gatekeeper → router → supervisor → 各节点）
+    graph.py              # LangGraph 编排（gatekeeper → supervisor → 并行分析 → reducer）
     state.py              # 定义全局 State 结构（统一所有节点输入输出字段）、保证编排一致性
+    config.py             # 集中化配置管理（环境变量统一读取）
     skills_runtime.py     # 读取 SKILL.md、snippets、schema 与工具白名单
-    
+
     chains/
       gatekeeper.py       # 确定性裁剪候选节点（宏观需时序可用，合规需文本可用）
-      router.py           # 路由（基于 gatekeeper 的候选 → nodes_to_run）
       supervisor.py       # LLM 调度，失效时回退到确定性候选列表（细化 nodes_to_run）
       market.py           # 市场风险链路（波动率）
       concentration.py    # 集中度链路（HHI、最大权重）
       diversification.py  # 分散度链路（有效持仓数：1/HHI）
       liquidity.py        # 流动性链路（日内振幅做近似）
       reducer.py          # 汇总 findings 与风险报告
-    
+
     agents/
+      prompts.py          # Agent 系统提示词（包含角色职责、输入说明、工具指南、输出示例）
       macro_agent.py      # 宏观工具调用 Agent（macro_timeseries 对接 Tushare；macro_search 文本检索占位）
       compliance_agent.py # 可拓展合规 Agent（RAG 检索公告/规则/内部条款，生成禁投清单与结构化风险结论）
-    
+
     tools/
+      utils.py            # 共享工具函数（normalize_weights, compute_hhi, compute_effective_n）
       validate.py         # 早期输入校验与归一化（交易意图可为delta，也可为最终权重）
       data_quality.py     # 数据可用性/缺失/新鲜度口径（market/macro/compliance/positions）
       snapshot.py         # 快照指标（波动、HHI、流动性等）（将行情/宏观数据转换成统一的风险指标）
