@@ -10,25 +10,7 @@ except ImportError:  # pragma: no cover - optional dependency
 
 from ..state import RiskState
 from .rules import load_rules
-
-
-def _normalize(weights: Dict[str, float]) -> Dict[str, float]:
-    total = float(sum(weights.values()))
-    if total <= 0:
-        return weights
-    return {k: v / total for k, v in weights.items()}
-
-
-def _hhi(weights: Dict[str, float]) -> float:
-    total = float(sum(weights.values()))
-    if total <= 0:
-        return 0.0
-    return float(sum((v / total) ** 2 for v in weights.values()))
-
-
-def _effective_n(weights: Dict[str, float]) -> float:
-    hhi = _hhi(weights)
-    return 1.0 / hhi if hhi > 0 else 0.0
+from .utils import normalize_weights, compute_hhi, compute_effective_n
 
 
 def _strip_cash(weights: Dict[str, float], cash_symbol: str) -> Dict[str, float]:
@@ -90,7 +72,7 @@ def _limit_holdings(
     cash = float(weights.get(cash_symbol, 0.0))
     if cash > 0:
         trimmed[cash_symbol] = cash
-    return _normalize(trimmed), True
+    return normalize_weights(trimmed), True
 
 def _adjust_weights(
     target_weights: Dict[str, float],
@@ -109,13 +91,13 @@ def _adjust_weights(
     n_target = float(profile.get("effective_n_restrict") or 0.0)
     if need_diversify:
         base = _strip_cash(adjusted, cash_symbol)
-        if (hhi_target and _hhi(base) > hhi_target) or (n_target and _effective_n(base) < n_target):
+        if (hhi_target and compute_hhi(base) > hhi_target) or (n_target and compute_effective_n(base) < n_target):
             for alpha in (0.3, 0.6, 1.0):
                 blended = _blend_equal(base, alpha)
                 candidate = _cap_and_fill(blended, cap, cash_symbol)
                 cand_base = _strip_cash(candidate, cash_symbol)
-                if (not hhi_target or _hhi(cand_base) <= hhi_target) and (
-                    not n_target or _effective_n(cand_base) >= n_target
+                if (not hhi_target or compute_hhi(cand_base) <= hhi_target) and (
+                    not n_target or compute_effective_n(cand_base) >= n_target
                 ):
                     adjusted = candidate
                     notes.append("improve_diversification")

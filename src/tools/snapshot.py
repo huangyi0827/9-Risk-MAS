@@ -6,6 +6,7 @@ import os
 
 from ..state import RiskState
 from .csv_data import market_metrics, lookback_start_date
+from .utils import normalize_weights, compute_hhi, compute_effective_n
 
 
 def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
@@ -28,22 +29,15 @@ def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
     market = market_metrics(codes, start_date or asof_date, asof_date)
     missing = [c for c in target_weights if c not in market]
 
-    def _normalize(weights: Dict[str, float]) -> Dict[str, float]:
-        cleaned = {k: float(v) for k, v in weights.items()}
-        total = float(sum(cleaned.values()))
-        if total <= 0:
-            return cleaned
-        return {k: v / total for k, v in cleaned.items()}
-
-    target_norm = _normalize(target_weights)
-    current_norm = _normalize(current_weights)
-
-    hhi = sum(float(w) ** 2 for w in target_norm.values())
-    effective_n = 1.0 / hhi if hhi > 0 else 0.0
+    # Use shared utility functions instead of local definitions
+    target_norm = normalize_weights(target_weights)
+    current_norm = normalize_weights(current_weights)
+    hhi = compute_hhi(target_norm, already_normalized=True)
+    effective_n = compute_effective_n(target_norm, already_normalized=True)
     top_weight = max(target_norm.values(), default=0.0)
 
-    current_hhi = sum(float(w) ** 2 for w in current_norm.values())
-    current_effective_n = 1.0 / current_hhi if current_hhi > 0 else 0.0
+    current_hhi = compute_hhi(current_norm, already_normalized=True)
+    current_effective_n = compute_effective_n(current_norm, already_normalized=True)
     current_top_weight = max(current_norm.values(), default=0.0)
 
     # turnover and max single position change (based on current vs target)

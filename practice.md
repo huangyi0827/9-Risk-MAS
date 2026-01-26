@@ -2,18 +2,19 @@
 
 ## 练习题说明
 ### 背景
-你将基于给定的代码骨架，完成一个简化版风控 MAS（多智能体协作系统）流程：从输入校验、风险指标计算、路由选择，到汇总与决策输出。系统应能跑通主流程，并包含一个“Agent + Tool”的最小闭环。
+你将基于给定的代码骨架，完成一个简化版风控 MAS（多智能体协作系统）流程：从输入校验、风险指标计算、路由选择，到汇总与决策输出。系统应能跑通主流程，并包含一个"Agent + Tool"的最小闭环。
 
 ### 目标
 - 理解并搭建 MAS 的主流程编排
-- 形成“硬规则优先 + 软报告兜底”的决策逻辑
+- 形成"硬规则优先 + 软报告兜底"的决策逻辑
 - 体验工具调用型 Agent 的最小使用场景
+- 理解 LangGraph 并行执行机制
 
 ### 你需要完成的模块
 - 状态板块：`src/state.py`
 - 输入规范化：`src/tools/validate.py`
-- 数据与指标：`src/tools/csv_data.py` / `src/tools/data_quality.py` / `src/tools/snapshot.py`
-- 编排与汇总：`src/graph.py` / `src/chains/gatekeeper.py` / `src/chains/router.py` / `src/chains/supervisor.py` / `src/chains/reducer.py`
+- 数据与指标：`src/tools/utils.py` / `src/tools/csv_data.py` / `src/tools/data_quality.py` / `src/tools/snapshot.py`
+- 编排与汇总：`src/graph.py` / `src/chains/gatekeeper.py` / `src/chains/supervisor.py` / `src/chains/reducer.py`
 - 分析链路：`src/chains/market.py` / `src/chains/concentration.py` / `src/chains/diversification.py` / `src/chains/liquidity.py`
 - Agent + Tool（必做）：`src/agents/macro_agent.py` / `src/agents/agent_utils.py` / `src/agents/prompts.py`
 - 阈值板块：`src/tools/calibrate_rules.py` / `src/tools/calibrate_macro_series.py`
@@ -96,13 +97,10 @@ def new_state(intent: Intent, context: Optional[Context] = None) -> RiskState:
 from typing import Dict, Any, Tuple
 from ..state import RiskState
 from ..tools.csv_data import previous_trading_date
+from ..tools.utils import normalize_weights
 
 def _sum_weights(weights: Dict[str, float]) -> float:
     return float(sum(weights.values())) if weights else 0.0
-
-def _normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
-    # TODO: 归一化权重
-    ...
 
 def _coerce_weights(weights: Dict[str, Any], errors: list[str], label: str) -> Dict[str, float]:
     # TODO: 解析权重为 float
@@ -121,7 +119,7 @@ def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
 
     # TODO: 校验 date/mode
     # TODO: 解析 targets/current_positions
-    # TODO: 生成 target_weights（delta 合并或 target 归一）
+    # TODO: 生成 target_weights（delta 合并或 target 归一，使用 normalize_weights）
     # TODO: 生成 universe
     # TODO: asof_date = previous_trading_date(intent.date)
 
@@ -147,7 +145,24 @@ def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
 
 ---
 
-## 3. 数据与指标（csv_data.py / data_quality.py / snapshot.py）
+## 3. 数据与指标（config.py / csv_data.py / data_quality.py / snapshot.py / utils.py）
+
+```python
+# src/config.py
+import os
+
+class Config:
+    """集中管理配置项，避免环境变量分散读取。"""
+
+    # 市场数据
+
+    # 宏观数据
+   
+    # 组合约束
+   
+    # LLM 配置
+   
+```
 
 ```python
 # csv_data.py
@@ -213,6 +228,7 @@ def macro_latest_date(asof_date: str | None = None) -> str:
 # data_quality.py
 from typing import Dict, Any, List
 from ..state import RiskState
+from ..config import Config
 from .csv_data import (
     security_master_codes,
     market_metrics,
@@ -226,6 +242,10 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
     """
     目标：缺失/新鲜度口径统一，输出 data_quality + data_gaps
     """
+    # 使用 Config 获取配置
+    lookback = Config.MARKET_LOOKBACK_DAYS
+    stale_days = Config.MACRO_STALE_DAYS
+
     # TODO: 检查 ETF master / market data 缺失
     # TODO: 计算宏观文本新鲜度与未来数据
     # TODO: 标记 macro/compliance 可用性
@@ -240,6 +260,7 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
 from typing import Dict, Any
 from ..state import RiskState
 from .csv_data import market_metrics, lookback_start_date
+from .utils import normalize_weights, compute_hhi, compute_effective_n
 
 def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
     """
@@ -252,21 +273,56 @@ def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
     return {"snapshot_metrics": {}}
 ```
 
+```python
+# src/tools/utils.py
+from typing import Dict
+
+WEIGHT_TOLERANCE = 1e-6
+EPSILON = 1e-12
+
+def normalize_weights(weights: Dict[str, float]) -> Dict[str, float]:
+    """归一化权重，使其总和为 1。"""
+
+def compute_hhi(weights: Dict[str, float], already_normalized: bool = False) -> float:
+    """计算 Herfindahl-Hirschman Index（集中度指标）。"""
+   
+def compute_effective_n(weights: Dict[str, float], already_normalized: bool = False) -> float:
+    """计算有效标的数（1/HHI）。"""
+  
+```
+
 ---
 
-## 4. 编排与汇总（graph.py / gatekeeper.py / router.py / supervisor.py / reducer.py）
+## 4. 编排与汇总（graph.py / gatekeeper.py / supervisor.py / reducer.py）
 
 ```python
 # graph.py
 from langgraph.graph import StateGraph
+from langgraph.constants import Send
+from typing import List
 from .state import RiskState
+
+def _guarded_node(name: str, fn):
+    """
+    包装节点函数，支持条件执行。
+    重要：不执行时返回显式的 finding_{name}=None，避免状态丢失。
+    """
+  
+def dispatch_to_parallel(state: RiskState) -> List[Send]:
+    """
+    使用 LangGraph Send API 实现真正的并行执行。
+    将所有待执行节点同时发送，而非串行循环。
+    """
+
 
 def build_graph():
     """
-    组装主流程：validate → data_quality → snapshot → gatekeeper → router
-             → supervisor → 分析节点 → reducer → decision
+    组装主流程（v2.0 并行架构）：
+    validate → data_quality → snapshot → gatekeeper → supervisor
+            → 并行分析节点 → reducer → decision
     """
     graph = StateGraph(RiskState)
+
     # TODO: 注册各节点 + 条件路由
     return graph.compile()
 ```
@@ -283,25 +339,26 @@ def gatekeeper_chain(state: RiskState) -> Dict[str, Any]:
 ```
 
 ```python
-# router.py
-from typing import Dict, Any
-from ..state import RiskState
-
-def router_chain(state: RiskState) -> Dict[str, Any]:
-    """路由规则：从 candidate_nodes 生成 nodes_to_run。"""
-    # TODO: 基于规则/数据质量选择节点
-    return {"nodes_to_run": [], "stop_condition": False, "cost_budget": {"llm_tokens": 2000}}
-```
-
-```python
 # supervisor.py
 from typing import Dict, Any
 from ..state import RiskState
 
 def supervisor_chain(state: RiskState, llm) -> Dict[str, Any]:
-    """LLM 调度：解释保留/剔除节点，并输出调度理由。"""
+    """
+    LLM 调度：从 candidate_nodes 生成 pending_agents，并输出调度理由。
+    注意：v2.0 移除了 router，supervisor 直接接收 candidate_nodes。
+    """
+    candidate = state.get("candidate_nodes") or []
+
+    # TODO: LLM 决策保留/剔除节点
     # TODO: 生成 supervisor_rationale
-    return {"supervisor_used": True, "supervisor_rationale": "...", "supervisor_model": "..."}
+
+    return {
+        "pending_agents": candidate,  # 待执行的节点列表
+        "supervisor_used": True,
+        "supervisor_rationale": "...",
+        "supervisor_model": "...",
+    }
 ```
 
 ```python
@@ -384,17 +441,38 @@ def wrap_tool(name: str, fn: Callable[..., Dict[str, Any]]):
 ```python
 # macro_agent.py
 from typing import Dict, Any
+from .agent_utils import wrap_tool
 
-def macro_timeseries(series: str) -> Dict[str, Any]:
-    """宏观时序工具。"""
+def _macro_timeseries_impl(series: str, asof_date: str) -> Dict[str, Any]:
+    """宏观时序工具实现（接收 asof_date 参数）。"""
     ...
 
-def macro_search(query: str) -> Dict[str, Any]:
-    """宏观文本/情绪检索。"""
+def _macro_search_impl(query: str, asof_date: str) -> Dict[str, Any]:
+    """宏观文本/情绪检索实现（接收 asof_date 参数）。"""
     ...
+
+def _create_tools_with_asof_date(asof_date: str):
+    """
+    创建绑定特定 asof_date 的工具实例。
+    使用闭包而非全局变量，确保线程安全。
+    """
+    def timeseries_impl(series: str) -> Dict[str, Any]:
+        return _macro_timeseries_impl(series, asof_date)
+
+    def search_impl(query: str) -> Dict[str, Any]:
+        return _macro_search_impl(query, asof_date)
+
+    return (
+        wrap_tool("macro_timeseries", timeseries_impl),
+        wrap_tool("macro_search", search_impl),
+    )
 
 def run_macro_agent(state: Dict[str, Any], llm) -> Dict[str, Any]:
-    """先时序，后文本；输出 finding_macro。"""
+    """
+    执行宏观分析 Agent。
+    注意：通过闭包传入 asof_date，避免全局变量的线程安全问题。
+    """
+    # TODO: 调用 LLM with tools
     return {"finding_macro": {"agent": "MacroToolCallingAgent", "risk_type": "macro"}}
 ```
 
@@ -409,6 +487,21 @@ def compliance_search(query: str) -> Dict[str, Any]:
 def run_compliance_agent(state: Dict[str, Any], llm) -> Dict[str, Any]:
     """输出 finding_compliance + blocklist。"""
     return {"finding_compliance": {"agent": "ComplianceToolCallingAgent", "risk_type": "compliance"}}
+```
+
+```python
+# prompts.py
+"""风险评估智能体系统提示语。
+每项提示语均包含：
+- 角色与职责说明
+- 输入数据解读
+- 工具使用指南
+- 带示例的输出格式规范
+- 证据要求
+"""
+MACRO_SYSTEM_PROMPT = ""
+
+COMPLIANCE_SYSTEM_PROMPT =""
 ```
 
 ---
@@ -456,9 +549,13 @@ def evaluate_constraints(metrics: Dict[str, Any], rules: Dict[str, Any]) -> List
 ```python
 # solver.py
 from typing import Dict, Any
+from .utils import normalize_weights, compute_hhi
 
 def constraint_solver(state: Dict[str, Any]) -> Dict[str, Any]:
     """restrict 时输出建议调仓。"""
+    # 使用共享的工具函数
+    # normalized = normalize_weights(weights)
+    # hhi = compute_hhi(normalized, already_normalized=True)
     return {"recommended_actions": []}
 ```
 
@@ -522,5 +619,3 @@ def audit_log(state: Dict[str, Any]) -> Dict[str, Any]:
         }
     }
 ```
-
-

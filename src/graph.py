@@ -1,8 +1,9 @@
 from __future__ import annotations
 
-from typing import Any, Dict
+from typing import Any, Dict, List, Literal
 
 from langgraph.graph import StateGraph, END
+from langgraph.types import Send
 from langchain_core.runnables import RunnableLambda
 
 from .state import RiskState
@@ -16,7 +17,6 @@ from .tools import (
     audit_log,
 )
 from .chains import (
-    router_chain,
     gatekeeper_chain,
     supervisor_chain,
     market_risk_chain,
@@ -28,20 +28,18 @@ from .chains import (
 from .agents import run_macro_agent, run_compliance_agent
 
 
-def _should_run(state: RiskState, name: str) -> bool:
+def _should_run_node(state: RiskState, name: str) -> bool:
+    """Check if a node should run based on pending_agents list."""
     if state.get("stop_condition"):
         return False
-    next_agent = state.get("next_agent") or ""
-    return next_agent == name
-
-
-def _next_node(state: RiskState) -> str:
-    return state.get("next_agent") or "reducer"
+    pending = state.get("pending_agents") or []
+    return name in pending
 
 
 def build_graph(llm=None):
     g = StateGraph(RiskState)
 
+    # ===== Pipeline nodes =====
     def validate_node(state: RiskState) -> Dict[str, Any]:
         return validate_and_normalize(state)
 
@@ -57,38 +55,38 @@ def build_graph(llm=None):
     def gatekeeper_node(state: RiskState) -> Dict[str, Any]:
         return gatekeeper_chain(state)
 
-    def router_node(state: RiskState) -> Dict[str, Any]:
-        return router_chain(state)
-
     def supervisor_node(state: RiskState) -> Dict[str, Any]:
         candidates = state.get("nodes_to_run") or []
         return supervisor_chain(state, llm, candidates)
 
-    def dispatch_node(state: RiskState) -> Dict[str, Any]:
-        pending = list(state.get("pending_agents") or [])
-        if not pending:
-            return {"next_agent": "", "pending_agents": []}
-        next_agent = pending.pop(0)
-        return {"next_agent": next_agent, "pending_agents": pending}
-
-    def _guarded_node(name: str, fn):
-        def _node(state: RiskState) -> Dict[str, Any]:
-            if not _should_run(state, name):
-                return {}
-            return fn(state)
-
-        return _node
-
+    # ===== Analysis nodes (deterministic chains) =====
     analysis_nodes = {
         "market": market_risk_chain,
         "concentration": concentration_chain,
         "diversification": diversification_chain,
         "liquidity": liquidity_chain,
     }
+
+    # ===== Agent nodes (LLM-based) =====
     agent_nodes = {
         "macro": lambda state: run_macro_agent(state, llm),
         "compliance": lambda state: run_compliance_agent(state, llm),
     }
+
+    all_analysis_nodes = {**analysis_nodes, **agent_nodes}
+
+
+    def _guarded_node(name: str, fn):
+        """Wrap a node function with guard logic.
+
+        FIX: Returns explicit finding_<name>=None instead of empty dict
+        to ensure state field exists for downstream nodes.
+        """
+        def _node(state: RiskState) -> Dict[str, Any]:
+            if not _should_run_node(state, name):
+                return {f"finding_{name}": None}
+            return fn(state)
+        return _node
 
     def reducer_node(state: RiskState) -> Dict[str, Any]:
         return reducer_chain(state)
@@ -102,18 +100,34 @@ def build_graph(llm=None):
     def audit_node(state: RiskState) -> Dict[str, Any]:
         return audit_log(state)
 
+    # ===== Parallel dispatch using LangGraph Send API =====
+    def dispatch_to_parallel(state: RiskState) -> List[Send]:
+        """Route to multiple analysis nodes in parallel using Send API.
+
+        This replaces the old serial dispatch loop with true parallel execution.
+        """
+        if state.get("stop_condition"):
+            return [Send("reducer", state)]
+
+        pending = state.get("pending_agents") or []
+        if not pending:
+            return [Send("reducer", state)]
+
+        # Send to all pending nodes in parallel
+        sends = [Send(node, state) for node in pending if node in all_analysis_nodes]
+        if not sends:
+            return [Send("reducer", state)]
+        return sends
+
+    # ===== Register nodes =====
     g.add_node("validate", RunnableLambda(validate_node))
     g.add_node("data_quality", RunnableLambda(data_quality_node))
     g.add_node("snapshot", RunnableLambda(snapshot_node))
     g.add_node("constraints", RunnableLambda(constraints_node))
     g.add_node("gatekeeper", RunnableLambda(gatekeeper_node))
-    g.add_node("router", RunnableLambda(router_node))
     g.add_node("supervisor", RunnableLambda(supervisor_node))
-    g.add_node("dispatch", RunnableLambda(dispatch_node))
 
-    for name, fn in analysis_nodes.items():
-        g.add_node(name, RunnableLambda(_guarded_node(name, fn)))
-    for name, fn in agent_nodes.items():
+    for name, fn in all_analysis_nodes.items():
         g.add_node(name, RunnableLambda(_guarded_node(name, fn)))
 
     g.add_node("reducer", RunnableLambda(reducer_node))
@@ -121,25 +135,22 @@ def build_graph(llm=None):
     g.add_node("solver", RunnableLambda(solver_node))
     g.add_node("audit", RunnableLambda(audit_node))
 
+    # ===== Build graph edges =====
+    # Sequential pipeline: validate → data_quality → snapshot → gatekeeper → supervisor
     g.set_entry_point("validate")
     g.add_edge("validate", "data_quality")
     g.add_edge("data_quality", "snapshot")
     g.add_edge("snapshot", "gatekeeper")
-    g.add_edge("gatekeeper", "router")
-    g.add_edge("router", "supervisor")
+    g.add_edge("gatekeeper", "supervisor")
 
-    g.add_edge("supervisor", "dispatch")
+    # Parallel dispatch: supervisor → [market|concentration|...] in parallel
+    g.add_conditional_edges("supervisor", dispatch_to_parallel)
 
-    dispatch_targets = {name: name for name in {**analysis_nodes, **agent_nodes}}
-    dispatch_targets["reducer"] = "reducer"
-    g.add_conditional_edges(
-        "dispatch",
-        _next_node,
-        dispatch_targets,
-    )
+   
+    for name in all_analysis_nodes:
+        g.add_edge(name, "reducer")
 
-    for name in {**analysis_nodes, **agent_nodes}:
-        g.add_edge(name, "dispatch")
+    # Final pipeline: reducer → constraints → decision → solver → audit → END
     g.add_edge("reducer", "constraints")
     g.add_edge("constraints", "decision")
     g.add_edge("decision", "solver")

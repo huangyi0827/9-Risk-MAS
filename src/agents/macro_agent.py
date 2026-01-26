@@ -77,7 +77,16 @@ def _format_tushare_year_start(value: str) -> str:
     return f"{parsed.year}0101"
 
 
-def _tushare_timeseries_from_config(series: str, config: Dict[str, Any]) -> Tuple[Dict[str, Any], str | None]:
+def _tushare_timeseries_from_config(
+    series: str, config: Dict[str, Any], asof_date: str = ""
+) -> Tuple[Dict[str, Any], str | None]:
+    """Fetch timeseries from Tushare API.
+
+    Args:
+        series: Series identifier
+        config: Series configuration from macro_series.yaml
+        asof_date: Reference date for data alignment (thread-safe parameter)
+    """
     token = os.getenv("TUSHARE_TOKEN", "").strip()
     if not token:
         raise SystemExit("TUSHARE_TOKEN not configured")
@@ -89,12 +98,12 @@ def _tushare_timeseries_from_config(series: str, config: Dict[str, Any]) -> Tupl
     params: Dict[str, Any] = dict(config.get("params") or {})
     if series_param:
         params[series_param] = config.get("series_value") or series
-    if _CURRENT_ASOF_DATE and "end_date" not in params:
-        end_date = _format_tushare_date(_CURRENT_ASOF_DATE)
+    if asof_date and "end_date" not in params:
+        end_date = _format_tushare_date(asof_date)
         if end_date:
             params["end_date"] = end_date
-    if _CURRENT_ASOF_DATE and "start_date" not in params:
-        start_date = _format_tushare_year_start(_CURRENT_ASOF_DATE)
+    if asof_date and "start_date" not in params:
+        start_date = _format_tushare_year_start(asof_date)
         if start_date:
             params["start_date"] = start_date
     fields = str(config.get("fields") or "").strip()
@@ -164,7 +173,6 @@ def _tushare_timeseries_from_config(series: str, config: Dict[str, Any]) -> Tupl
         return {"series": series, "values": []}, None
 
     rows.sort(key=lambda item: item[0])
-    asof_date = _CURRENT_ASOF_DATE or ""
     asof_dt = _parse_date(asof_date)
     if asof_dt:
         rows = [r for r in rows if r[0] <= asof_dt]
@@ -196,8 +204,13 @@ def _tushare_timeseries_from_config(series: str, config: Dict[str, Any]) -> Tupl
     return payload, None
 
 
-def _macro_timeseries_impl(series: str) -> Dict[str, Any]:
-    """Return simplified macro time series samples."""
+def _macro_timeseries_impl(series: str, asof_date: str = "") -> Dict[str, Any]:
+    """Return simplified macro time series samples.
+
+    Args:
+        series: Series identifier
+        asof_date: Reference date for data alignment (thread-safe parameter)
+    """
     config = _load_macro_series_config().get(series)
     if not config:
         return {
@@ -206,7 +219,7 @@ def _macro_timeseries_impl(series: str) -> Dict[str, Any]:
             "provenance": _provenance("tushare", {"series": series, "error": "series not configured"}),
         }
 
-    payload, err = _tushare_timeseries_from_config(series, config)
+    payload, err = _tushare_timeseries_from_config(series, config, asof_date)
     if err:
         return {
             "series": series,
@@ -218,36 +231,55 @@ def _macro_timeseries_impl(series: str) -> Dict[str, Any]:
         **payload,
         "provenance": _provenance(
             "tushare",
-            {"series": series, "rows": len(payload.get("values") or []), "asof_date": _CURRENT_ASOF_DATE or None},
+            {"series": series, "rows": len(payload.get("values") or []), "asof_date": asof_date or None},
         ),
     }
 
 
-def _macro_search_impl(query: str) -> Dict[str, Any]:
-    """Lightweight search over macro documents."""
-    hits = macro_search_hits(query, limit=5, asof_date=_CURRENT_ASOF_DATE or None)
+def _macro_search_impl(query: str, asof_date: str = "") -> Dict[str, Any]:
+    """Lightweight search over macro documents.
+
+    Args:
+        query: Search query string
+        asof_date: Reference date for filtering results (thread-safe parameter)
+    """
+    hits = macro_search_hits(query, limit=5, asof_date=asof_date or None)
     return {
         "query": query,
         "hits": hits,
         "provenance": _provenance(
             "macro_docs",
-            {"query": query, "hits": len(hits), "asof_date": _CURRENT_ASOF_DATE or None},
+            {"query": query, "hits": len(hits), "asof_date": asof_date or None},
         ),
     }
 
 
-_CURRENT_ASOF_DATE = ""
+# FIX: Removed global variable _CURRENT_ASOF_DATE and _set_asof_date function
+# asof_date is now passed as a parameter to all functions that need it
 
 
-def _set_asof_date(asof_date: str) -> None:
-    global _CURRENT_ASOF_DATE
-    _CURRENT_ASOF_DATE = asof_date or ""
+def _create_tools_with_asof_date(asof_date: str):
+    """Create tool instances bound to a specific asof_date.
 
+    This factory function creates thread-safe tool instances by capturing
+    asof_date in a closure instead of using a global variable.
 
-macro_timeseries = wrap_tool("macro_timeseries", _macro_timeseries_impl)
+    Args:
+        asof_date: Reference date to bind to the tools
 
+    Returns:
+        Tuple of (macro_timeseries_tool, macro_search_tool)
+    """
+    def timeseries_impl(series: str) -> Dict[str, Any]:
+        return _macro_timeseries_impl(series, asof_date)
 
-macro_search = wrap_tool("macro_search", _macro_search_impl)
+    def search_impl(query: str) -> Dict[str, Any]:
+        return _macro_search_impl(query, asof_date)
+
+    return (
+        wrap_tool("macro_timeseries", timeseries_impl),
+        wrap_tool("macro_search", search_impl),
+    )
 
 
 def _fallback_finding(severity: int) -> Finding:
@@ -268,7 +300,7 @@ def _llm_model_name(llm) -> str:
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or "")
 
 
-def _prefetch_macro_timeseries() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+def _prefetch_macro_timeseries(asof_date: str = "") -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
     series_cfg = _load_macro_series_config()
     series_list = list(series_cfg.keys())
     if not series_list:
@@ -280,7 +312,7 @@ def _prefetch_macro_timeseries() -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
         start = time.monotonic()
         error = None
         try:
-            output = _macro_timeseries_impl(series)
+            output = _macro_timeseries_impl(series, asof_date)
         except Exception as exc:  # pragma: no cover - runtime tool errors
             error = repr(exc)
             output = {"error": error}
@@ -396,7 +428,8 @@ def _compute_macro_severity(tool_results: Dict[str, Any]) -> int:
 
 def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
     normalized = state.get("normalized") or {}
-    _set_asof_date(str(normalized.get("asof_date") or ""))
+    asof_date = str(normalized.get("asof_date") or "")
+
     data_quality = state.get("data_quality") or {}
     if not (data_quality.get("macro") or {}).get("timeseries_available", False):
         snapshot = state.get("snapshot_metrics") or {}
@@ -407,7 +440,8 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
             "llm_model_macro": "",
             "snapshot_metrics": snapshot,
         }
-    prefetched_calls, prefetched_results = _prefetch_macro_timeseries()
+
+    prefetched_calls, prefetched_results = _prefetch_macro_timeseries(asof_date)
     macro_severity = _compute_macro_severity(prefetched_results)
     snapshot = state.get("snapshot_metrics") or {}
     updated_snapshot = dict(snapshot)
@@ -424,6 +458,7 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
         }
 
     skill = load_skill("macro-tool-calling")
+    macro_timeseries, macro_search = _create_tools_with_asof_date(asof_date)
     tools = filter_tools([macro_timeseries, macro_search], skill.allowlist)
     if not tools:
         return {
