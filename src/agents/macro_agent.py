@@ -11,7 +11,6 @@ from typing import Any, Dict, List, Tuple
 
 from langchain.agents import create_agent
 import yaml
-from .prompts import MACRO_SYSTEM_PROMPT
 from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
 from ..state import RiskState, Finding
 from ..tools.csv_data import macro_search_hits
@@ -469,7 +468,7 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
             "snapshot_metrics": updated_snapshot,
         }
 
-    system_prompt = build_system_prompt(MACRO_SYSTEM_PROMPT, skill)
+    system_prompt = build_system_prompt("", skill)
     agent = create_agent(llm, tools, system_prompt=system_prompt)
 
     payload = {

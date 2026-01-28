@@ -285,6 +285,8 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_rules --asof-date <AS
 uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series --asof-date <ASOF_DATE>（同上）
 ```
 
+#### 注：每次运行test.py，阈值配置均会根据用户输入（目标持仓的种类数、交易时间等）而自动更新
+
 ### 6) 最小可运行样例
 ```python
 from risk_mas import RiskMAS
@@ -321,8 +323,8 @@ print(mas.run(intent=intent, context=context))
 2) 阈值与校准  
    - 组合阈值：`cufel_practice_data/rules.yaml`  
 
-3) Skills 与工具权限  
-   - 调整 `skills/*/SKILL.md` 的 allowlist/snippets/schema 与 evidence_prefixes  
+3) Skills 与工具权限
+   - 调整 `skills/*/SKILL.md` 的 allowlist/snippets/schema 与 evidence_prefixes
    - 确保 `skills/tools/tool_interfaces.yaml` 与实际工具一致  
 
 4) 审计与输出  
@@ -349,9 +351,9 @@ risk-mas/
     README.md             # 数据接入说明
 
   skills/
-    */SKILL.md            # 各技能定义（prompt/snippets/allowlist）
+    */SKILL.md            # 技能定义（包含完整系统提示词 + 工具白名单 + 输出要求）
     */output.schema.json  # 技能输出 schema
-    snippets/             # 证据与决策提示片段
+    snippets/             # 可复用的证据与决策提示片段
     tools/                # 工具注册表
 ```
 
@@ -379,7 +381,7 @@ risk-mas/
       reducer.py          # 汇总 findings 与风险报告
 
     agents/
-      prompts.py          # Agent 系统提示词（包含角色职责、输入说明、工具指南、输出示例）
+      agent_utils.py      # Agent 工具函数（wrap_tool、extract_tool_calls 等）
       macro_agent.py      # 宏观工具调用 Agent（macro_timeseries 对接 Tushare；macro_search 文本检索占位）
       compliance_agent.py # 可拓展合规 Agent（RAG 检索公告/规则/内部条款，生成禁投清单与结构化风险结论）
 
@@ -408,20 +410,20 @@ risk-mas/
 
   skills/                 #把提示词/输出结构/工具权限/证据规则做成可配置的技能包，供 skills_runtime.py 加载
     risk-market-assessor/
-      SKILL.md            # 技能定义
+      SKILL.md            # 技能定义（包含完整的系统提示词、工具白名单、输出要求）
       output.schema.json  # 输出 schema
       examples.json       # 示例（可选）
-    
+
     liquidity-execution-assessor/
-      SKILL.md
+      SKILL.md            # 完整提示词配置
       output.schema.json
-    
+
     macro-tool-calling/
-      SKILL.md
+      SKILL.md            # 包含 MacroToolCallingAgent 的完整系统提示词（96行）
       output.schema.json
-    
+
     compliance-evidence/
-      SKILL.md
+      SKILL.md            # 包含 ComplianceToolCallingAgent 的完整系统提示词
       output.schema.json
       reference/          # 合规参考样例（可选）
     

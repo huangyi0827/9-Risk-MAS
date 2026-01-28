@@ -7,7 +7,6 @@ from typing import Any, Dict, List
 
 from langchain.agents import create_agent
 
-from .prompts import COMPLIANCE_SYSTEM_PROMPT
 from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
 from ..state import RiskState, Finding
 from ..tools.csv_data import compliance_search_hits
@@ -117,7 +116,7 @@ def run_compliance_agent(state: RiskState, llm) -> Dict[str, Any]:
             "llm_model_compliance": "",
         }
 
-    system_prompt = build_system_prompt(COMPLIANCE_SYSTEM_PROMPT, skill)
+    system_prompt = build_system_prompt("", skill)
     agent = create_agent(llm, tools, system_prompt=system_prompt)
 
     payload = {

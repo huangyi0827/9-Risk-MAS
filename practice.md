@@ -19,7 +19,7 @@
 | 数据与指标 | `src/tools/utils.py` / `src/tools/csv_data.py` / `src/tools/data_quality.py` / `src/tools/snapshot.py` |
 | 编排与汇总 | `src/graph.py` / `src/chains/gatekeeper.py` / `src/chains/supervisor.py` / `src/chains/reducer.py` |
 | 分析链路 | `src/chains/market.py` / `src/chains/concentration.py` / `src/chains/diversification.py` / `src/chains/liquidity.py` |
-| Agent + Tool（必做） | `src/agents/macro_agent.py` / `src/agents/agent_utils.py` / `src/agents/prompts.py` |
+| Agent + Tool（必做） | `src/agents/macro_agent.py` / `src/agents/agent_utils.py` / `skills/macro-tool-calling/SKILL.md` |
 | 阈值板块 | `src/tools/calibrate_rules.py` / `src/tools/calibrate_macro_series.py` |
 | 规则与决策 | `src/tools/decision.py` / `src/tools/solver.py` |
 | Skills | `skills/macro-tool-calling/SKILL.md` / `skills/macro-tool-calling/output.schema.json` / `skills/snippets/*` / `skills/tools/tool_interfaces.yaml` / `src/skills_runtime.py` |
@@ -425,7 +425,7 @@ def liquidity_chain(state: RiskState) -> Dict[str, Any]:
 
 ---
 
-## 6. Agent 与工具（macro_agent.py / compliance_agent.py / agent_utils.py / prompts.py）
+## 6. Agent 与工具（macro_agent.py / compliance_agent.py / agent_utils.py）
 
 ```python
 # agent_utils.py
@@ -473,8 +473,17 @@ def _create_tools_with_asof_date(asof_date: str):
 def run_macro_agent(state: Dict[str, Any], llm) -> Dict[str, Any]:
     """
     执行宏观分析 Agent。
-    注意：通过闭包传入 asof_date，避免全局变量的线程安全问题。
+    注意：
+    1. 通过闭包传入 asof_date，避免全局变量的线程安全问题
+    2. 系统提示词从 skills/macro-tool-calling/SKILL.md 加载，不再使用 prompts.py
     """
+    # TODO: 从 skills_runtime 加载 skill
+    # skill = load_skill("macro-tool-calling")
+    # TODO: 创建工具并过滤白名单
+    # tools = _create_tools_with_asof_date(asof_date)
+    # tools = filter_tools(tools, skill.allowlist)
+    # TODO: 构建系统提示词
+    # system_prompt = build_system_prompt("", skill)  # 注意：base="" 因为完整提示词在 skill.body
     # TODO: 调用 LLM with tools
     return {"finding_macro": {"agent": "MacroToolCallingAgent", "risk_type": "macro"}}
 ```
@@ -492,19 +501,30 @@ def run_compliance_agent(state: Dict[str, Any], llm) -> Dict[str, Any]:
     return {"finding_compliance": {"agent": "ComplianceToolCallingAgent", "risk_type": "compliance"}}
 ```
 
-```python
-# prompts.py
-"""风险评估智能体系统提示语。
-每项提示语均包含：
-- 角色与职责说明
-- 输入数据解读
-- 工具使用指南
-- 带示例的输出格式规范
-- 证据要求
-"""
-MACRO_SYSTEM_PROMPT = ""
+```yaml
+# skills/macro-tool-calling/SKILL.md
+---
+name: macro-tool-calling
+type: agent
+tools:
+  allowlist: [macro_timeseries, macro_search]
+  max_calls: 3
+snippets:
+  - snippets/evidence_rules.md
+---
 
-COMPLIANCE_SYSTEM_PROMPT =""
+# MacroToolCallingAgent 系统提示词
+
+你是 MacroToolCallingAgent，负责评估宏观经济环境对投资组合的影响。
+
+## 角色职责
+[详细的提示词内容，包含：]
+- 输入数据说明
+- 工具使用指南
+- 输出格式示例
+- 证据规范
+- 推理原则
+
 ```
 
 ---
@@ -566,32 +586,50 @@ def constraint_solver(state: Dict[str, Any]) -> Dict[str, Any]:
 
 ## 9. Skills 板块（SKILL.md / output.schema.json / tool_interfaces.yaml / skills_runtime.py）
 
+**重要变更**：Agent 的系统提示词已从 `src/agents/prompts.py` 迁移至各自的 `SKILL.md` 文件中。
+- `macro-tool-calling/SKILL.md` 包含 MacroToolCallingAgent 的完整提示词（96行）
+- `compliance-evidence/SKILL.md` 包含 ComplianceToolCallingAgent 的完整提示词（105行）
+- 修改提示词无需改代码，只需编辑 SKILL.md 文件
+
 ```text
 skills/
 ├── <skill-name>/
-│   ├── SKILL.md
-│   ├── output.schema.json
-│   └── examples.json
+│   ├── SKILL.md            # 包含完整的系统提示词 + frontmatter 配置
+│   ├── output.schema.json  # 输出结构校验
+│   └── examples.json       # （可选）
 ├── snippets/
-│   ├── evidence_rules.md
-│   └── decision_rubric.md
+│   ├── evidence_rules.md   # 可复用的证据规范
+│   └── decision_rubric.md  # 可复用的决策标准
 └── tools/
-    └── tool_interfaces.yaml
+    └── tool_interfaces.yaml  # 工具注册表
 ```
 
 ```python
 # skills_runtime.py
-def load_skill(skill_name: str) -> Dict[str, Any]:
-    # TODO: 读取 SKILL + Schema + examples
-    return {}
+def load_skill(skill_name: str) -> SkillSpec:
+    """
+    从 skills/<skill_name>/SKILL.md 加载技能配置。
+    返回：SkillSpec(name, body, schema, allowlist, snippets)
+    - body: SKILL.md 的提示词内容（frontmatter 之后的部分）
+    - schema: output.schema.json 的 JSON 对象
+    - allowlist: 工具白名单列表
+    """
+    # TODO: 解析 SKILL.md frontmatter + body
+    # TODO: 读取 output.schema.json
+    return SkillSpec(...)
 
-def build_prompt(skill: Dict[str, Any], snippets: Dict[str, str]) -> str:
-    # TODO: 拼装 prompt
+def build_system_prompt(base: str, skill: SkillSpec) -> str:
+    """
+    拼接系统提示词：base + skill.body + snippets + schema
+    注意：迁移后 base 通常为空字符串 ""，完整提示词在 skill.body 中
+    """
+    # TODO: 拼接 prompt 片段
     return ""
 
-def validate_output(schema: Dict[str, Any], output: Dict[str, Any]) -> bool:
-    # TODO: Schema 校验
-    return True
+def validate_output(skill: SkillSpec, output: Dict[str, Any]) -> List[str]:
+    """使用 skill.schema 校验 Agent 输出，返回错误列表"""
+    # TODO: jsonschema 校验
+    return []
 ```
 
 ---
