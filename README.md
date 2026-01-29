@@ -37,15 +37,15 @@ ENABLE_SUPERVISOR=0 uv run --env-file .env -- python -u -m src.app
 
 ### 配置 .env 文件
 在项目根目录创建 `.env`，用于配置模型与数据相关参数（示例）：
-```env
-LLM_PROVIDER=openai_compatible
-OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
-LLM_MODEL=qwen3-max
-OPENAI_API_KEY=sk-*************************************
-COMPLIANCE_RAG_SOURCE=csrc_2025.csv
-RAG_ENGINE=vector
-TUSHARE_TOKEN=your_token
-```
+| 变量名 | 变量说明 | 示例 |
+| --- | --- | --- |
+| `LLM_PROVIDER` | LLM 兼容协议/提供方标识 | `openai_compatible` |
+| `OPENAI_BASE_URL` | LLM 兼容接口地址 | `https://dashscope.aliyuncs.com/compatible-mode/v1` |
+| `LLM_MODEL` | 模型名称 | `qwen3-max` |
+| `OPENAI_API_KEY` | LLM API Key | `sk-*************************************` |
+| `COMPLIANCE_RAG_SOURCE` | 合规文本库（文件名或路径） | `csrc_2025.csv` |
+| `RAG_ENGINE` | 检索模式（vector / keyword） | `vector` |
+| `TUSHARE_TOKEN` | Tushare Token | `your_token` |
 如未设置 `LLM_MODEL`，则默认不启用 LLM；
 如未使用宏观时序（未设置Tushare的token），则默认不使用宏观风控agent。
 
