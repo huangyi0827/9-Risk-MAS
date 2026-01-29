@@ -103,6 +103,8 @@ def _format_num(value, digits: int = 5):
 
 def _build_minimal_view(result: Dict[str, Any]) -> Dict[str, Any]:
     findings = result.get("findings") or []
+    audit = result.get("audit") or {}
+    compliance_meta = audit.get("compliance_blocklist_meta") or {}
     return {
         "decision": (result.get("decision") or {}).get("decision"),
         "binding_constraints": result.get("binding_constraints") or [],
@@ -115,9 +117,11 @@ def _build_minimal_view(result: Dict[str, Any]) -> Dict[str, Any]:
             }
             for f in findings
         ],
-        "trace_id": (result.get("audit") or {}).get("trace_id"),
-        "llm_used": (result.get("audit") or {}).get("llm_used"),
-        "llm_model": (result.get("audit") or {}).get("llm_model"),
+        "compliance_blocklist_soft": audit.get("compliance_blocklist_soft") or [],
+        "compliance_industry_hits": compliance_meta.get("industry_hits") or [],
+        "trace_id": audit.get("trace_id"),
+        "llm_used": audit.get("llm_used"),
+        "llm_model": audit.get("llm_model"),
         "supervisor_used": result.get("supervisor_used"),
         "supervisor_rationale": result.get("supervisor_rationale"),
     }
@@ -244,6 +248,9 @@ def _print_tables(result: Dict[str, Any], minimal_view: Dict[str, Any]) -> None:
     if compliance_blocklist is not None:
         rules_snapshot = dict(rules_snapshot)
         rules_snapshot["blocklist"] = compliance_blocklist
+    compliance_meta = audit.get("compliance_blocklist_meta") or {}
+    soft_blocklist = audit.get("compliance_blocklist_soft") or []
+    industry_hits = compliance_meta.get("industry_hits") or []
     audit_rows = [
         ("policy_profile", audit.get("policy_profile") or ""),
         ("ruleset_version", audit.get("ruleset_version") or ""),
@@ -260,6 +267,8 @@ def _print_tables(result: Dict[str, Any], minimal_view: Dict[str, Any]) -> None:
         ("tool_calls", tool_summary.get("count", 0)),
         ("tool_errors", tool_summary.get("errors", 0)),
         ("tool_latency_ms", tool_summary.get("total_latency_ms", 0)),
+        ("compliance_blocklist_soft", ",".join(soft_blocklist) if soft_blocklist else "none"),
+        ("compliance_industry_hits", ",".join(industry_hits) if industry_hits else "none"),
         ("timestamp", audit.get("timestamp") or ""),
         ("trace_id", audit.get("trace_id") or ""),
     ]

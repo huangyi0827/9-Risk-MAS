@@ -56,7 +56,7 @@ def build_graph(llm=None):
         return gatekeeper_chain(state)
 
     def supervisor_node(state: RiskState) -> Dict[str, Any]:
-        candidates = state.get("nodes_to_run") or []
+        candidates = state.get("candidate_nodes") or []
         return supervisor_chain(state, llm, candidates)
 
     # ===== Analysis nodes (deterministic chains) =====

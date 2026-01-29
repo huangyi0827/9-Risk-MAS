@@ -1,5 +1,6 @@
 ---
 name: macro-tool-calling
+description: 宏观工具调用代理，结合时序与文本生成宏观风险结论
 type: agent
 inputs:
   - snapshot_metrics

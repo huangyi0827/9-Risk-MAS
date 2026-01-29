@@ -1,5 +1,6 @@
 ---
 name: liquidity-execution-assessor
+description: 基于流动性指标评估执行风险并输出结构化结论
 type: chain
 inputs:
   - snapshot_metrics

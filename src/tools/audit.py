@@ -94,5 +94,8 @@ def audit_log(state: RiskState) -> Dict[str, Any]:
     if compliance_blocklist is not None:
         audit["compliance_blocklist"] = compliance_blocklist
         audit["compliance_blocklist_meta"] = state.get("compliance_blocklist_meta") or {}
+    compliance_blocklist_soft = state.get("compliance_blocklist_soft")
+    if compliance_blocklist_soft is not None:
+        audit["compliance_blocklist_soft"] = compliance_blocklist_soft
 
     return {"audit": audit}

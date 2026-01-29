@@ -1,5 +1,6 @@
 ---
 name: risk-market-assessor
+description: 基于确定性指标评估市场/集中/分散风险并输出结论
 type: chain
 inputs:
   - snapshot_metrics

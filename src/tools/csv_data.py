@@ -55,6 +55,35 @@ def load_etf_basic() -> pd.DataFrame:
 
 
 @lru_cache(maxsize=1)
+def etf_industry_map() -> Dict[str, str]:
+    basic = load_etf_basic()
+    if basic.empty or "code" not in basic.columns or "indx_csname" not in basic.columns:
+        return {}
+    df = basic[["code", "indx_csname"]].dropna()
+    mapping: Dict[str, str] = {}
+    for _, row in df.iterrows():
+        code = str(row.get("code") or "").strip()
+        industry = str(row.get("indx_csname") or "").strip()
+        if code and industry:
+            mapping[code] = industry
+    return mapping
+
+
+def etf_codes_by_industry(industry_names: Iterable[str]) -> Dict[str, List[str]]:
+    mapping = etf_industry_map()
+    if not mapping:
+        return {}
+    wanted = {str(name).strip() for name in industry_names if str(name).strip()}
+    if not wanted:
+        return {}
+    reverse: Dict[str, List[str]] = {}
+    for code, industry in mapping.items():
+        if industry in wanted:
+            reverse.setdefault(industry, []).append(code)
+    return reverse
+
+
+@lru_cache(maxsize=1)
 def load_compliance_docs() -> pd.DataFrame:
     path = _data_dir() / "csrc_2025.csv"
     df = _load_csv(path)

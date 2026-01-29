@@ -46,6 +46,7 @@ class RiskState(TypedDict, total=False):
     snapshot_metrics: Dict[str, Any]
     rule_findings: List[Dict[str, Any]]
     compliance_blocklist: List[str]
+    compliance_blocklist_soft: List[str]
     compliance_blocklist_meta: Dict[str, Any]
 
     # routing

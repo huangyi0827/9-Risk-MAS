@@ -1,8 +1,8 @@
 from __future__ import annotations
 
+import argparse
 import datetime as dt
 import csv
-import json
 import random
 from typing import Dict, List
 
@@ -30,13 +30,13 @@ def _write_positions_csv(path: str, date: str, weights: Dict[str, float], note: 
             writer.writerow([date, code, weights.get(code)])
 
 
-def main() -> None:
-    codes = ["159213", "159959", "511960", "516310",'561180']
-    base_date = dt.date(2025, 11, 15)
+def main(output: str = "table") -> None:
+    codes = ["159213", "159959", "511960", "516310","CCC"]
+    base_date = dt.date(2025, 11, 25)
     intent_date = base_date + dt.timedelta(days=1)
 
-    current_weights = _random_weights(codes, seed=28)
-    target_weights = _random_weights(codes, seed=21)
+    current_weights = _random_weights(codes, seed=27)
+    target_weights = _random_weights(codes, seed=11)
 
     intent = {
         "date": intent_date.isoformat(),
@@ -49,7 +49,7 @@ def main() -> None:
         "universe": codes,
         "account_type": "brokerage",
         "jurisdiction": "CN",
-        "policy_profile": "conservative",
+        "policy_profile": "default",
         "aum": 1000000.0,
     }
 
@@ -57,7 +57,7 @@ def main() -> None:
     calibrate_rules(asof_date, len(intent["targets"]))
     calibrate_macro_series(asof_date)
 
-    mas = RiskMAS(output="table")
+    mas = RiskMAS(output=output)
     result = mas.run_raw(intent=intent, context=context)
 
     decision = (result.get("decision") or {}).get("decision")
@@ -75,14 +75,12 @@ def main() -> None:
     elif decision == "block":
         _write_positions_csv("post_risk_positions.csv", intent_date, {}, note="交易不通过，需人为干预")
 
-    table_output = mas.run(intent=intent, context=context, output="table")
-    if isinstance(table_output, str):
-        print(table_output)
-    else:
-        print(json.dumps(table_output, indent=2, ensure_ascii=False))
-
-    print(json.dumps(result, indent=2, ensure_ascii=False))
+    output_text = mas.run(intent=intent, context=context, output=output)
+    print(output_text)
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output", choices=["table", "json"], default="table")
+    args = parser.parse_args()
+    main(output=args.output)

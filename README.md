@@ -42,6 +42,8 @@ LLM_PROVIDER=openai_compatible
 OPENAI_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL=qwen3-max
 OPENAI_API_KEY=sk-*************************************
+COMPLIANCE_RAG_SOURCE=csrc_2025.csv
+RAG_ENGINE=vector
 TUSHARE_TOKEN=your_token
 ```
 如未设置 `LLM_MODEL`，则默认不启用 LLM；
@@ -240,6 +242,7 @@ print(result)
 | 变量 | 默认 | 说明 |
 | --- | --- | --- |
 | `OPENAI_API_KEY` | 空 | LLM API Key |
+| `OPENAI_BASE_URL` | 空 | 兼容 OpenAI 的 API 端点（用于 LLM/Embedding） |
 | `LLM_MODEL` | 空 | 模型名称（未设置则不启用 LLM） |
 | `ENABLE_SUPERVISOR` | `1` | 是否启用 LLM 调度（0/1） |
 
@@ -249,6 +252,17 @@ print(result)
 | `TUSHARE_TOKEN` | 空 | Tushare Token（缺失则宏观节点不进入候选） |
 | `MACRO_SERIES_CONFIG` | `cufel_practice_data/macro_series.yaml` | 宏观指标配置路径 |
 | `MACRO_STALE_DAYS` | `30` | 宏观文本数据陈旧阈值 |
+
+#### 合规文本 / RAG
+| 变量 | 默认 | 说明 |
+| --- | --- | --- |
+| `COMPLIANCE_RAG_SOURCE` | 空 | 合规文本库（文件名或完整路径） |
+| `RAG_ENGINE` | `vector` | 检索模式：`vector` / `keyword`（向量失败时自动退回关键词） |
+
+说明：
+- `vector` 模式会调用 embedding 服务，需要 `OPENAI_API_KEY`（以及可选的 `OPENAI_BASE_URL`）。
+- 若未配置 embedding，可将 `RAG_ENGINE=keyword` 仅用关键词检索。
+- RAG 的 LLM 上下文仅使用检索命中的 `snippet`，不保留全文。
 
 #### 组合执行与 LP
 | 变量 | 默认 | 说明 |
@@ -419,7 +433,7 @@ risk-mas/
       output.schema.json
 
     macro-tool-calling/
-      SKILL.md            # 包含 MacroToolCallingAgent 的完整系统提示词（96行）
+      SKILL.md            # 包含 MacroToolCallingAgent 的完整系统提示词
       output.schema.json
 
     compliance-evidence/
