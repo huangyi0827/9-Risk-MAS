@@ -46,6 +46,7 @@ ENABLE_SUPERVISOR=0 uv run --env-file .env -- python -u -m src.app
 | `COMPLIANCE_RAG_SOURCE` | 合规文本库（文件名或路径） | `csrc_2025.csv` |
 | `RAG_ENGINE` | 检索模式（vector / keyword） | `vector` |
 | `TUSHARE_TOKEN` | Tushare Token | `your_token` |
+
 如未设置 `LLM_MODEL`，则默认不启用 LLM；
 如未使用宏观时序（未设置Tushare的token），则默认不使用宏观风控agent。
 
