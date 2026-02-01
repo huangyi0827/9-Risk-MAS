@@ -31,12 +31,12 @@ def _write_positions_csv(path: str, date: str, weights: Dict[str, float], note: 
 
 
 def main(output: str = "table") -> None:
-    codes = ["159213", "159959", "511960", "516310","CCC"]
+    codes = ["159213", "159959", "511960"]
     base_date = dt.date(2025, 11, 25)
     intent_date = base_date + dt.timedelta(days=1)
 
     current_weights = _random_weights(codes, seed=27)
-    target_weights = _random_weights(codes, seed=11)
+    target_weights = _random_weights(codes, seed=13)
 
     intent = {
         "date": intent_date.isoformat(),
@@ -50,7 +50,7 @@ def main(output: str = "table") -> None:
         "account_type": "brokerage",
         "jurisdiction": "CN",
         "policy_profile": "default",
-        "aum": 1000000.0,
+        "aum": 10000.0,
     }
 
     asof_date = previous_trading_date(intent["date"])

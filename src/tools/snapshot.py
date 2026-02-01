@@ -2,31 +2,27 @@ from __future__ import annotations
 
 from typing import Dict, Any
 
-import os
-
 from ..state import RiskState
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 from .csv_data import market_metrics, lookback_start_date
 from .utils import normalize_weights, compute_hhi, compute_effective_n
 
 
-def risk_snapshot_bundle(state: RiskState) -> Dict[str, Any]:
+def risk_snapshot_bundle(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    """基于输入权重与行情数据计算指标快照。"""
+    cfg = config or DEFAULT_CONFIG
     normalized = state.get("normalized") or {}
     target_weights = normalized.get("target_weights") or {}
     current_weights = normalized.get("current_positions") or {}
     asof_date = normalized.get("asof_date") or ""
     aum = normalized.get("aum")
     if aum is None:
-        env_aum = os.getenv("PORTFOLIO_AUM") or os.getenv("AUM")
-        if env_aum:
-            try:
-                aum = float(env_aum)
-            except ValueError:
-                aum = None
-    lookback_days = int(os.getenv("MARKET_LOOKBACK_DAYS", "60"))
+        aum = cfg.default_aum
+    lookback_days = int(cfg.market_lookback_days)
     start_date = lookback_start_date(asof_date, lookback_days)
 
     codes = set(target_weights) | set(current_weights)
-    market = market_metrics(codes, start_date or asof_date, asof_date)
+    market = market_metrics(codes, start_date or asof_date, asof_date, cfg)
     missing = [c for c in target_weights if c not in market]
 
     # Use shared utility functions instead of local definitions

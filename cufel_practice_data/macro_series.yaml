@@ -17,8 +17,8 @@ series:
     stale_days: 3
     change_mode: abs
     change_scale: bp
-    warn_pct_change: 1.1699999999999995
-    restrict_pct_change: 2.9180000000000006
+    warn_pct_change: 1.0999999999999899
+    restrict_pct_change: 2.819999999999992
   usdcnh_mid_close:
     api: fx_daily
     series_param: ts_code
@@ -30,5 +30,5 @@ series:
     date_shift_days: 1
     stale_days: 5
     change_mode: pct
-    warn_pct_change: 0.0031247596819261978
-    restrict_pct_change: 0.006479792718554709
+    warn_pct_change: 0.003145769391539681
+    restrict_pct_change: 0.0064623910253854425

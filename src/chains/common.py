@@ -1,15 +1,14 @@
 from __future__ import annotations
 
-from functools import lru_cache
 from typing import Any, Dict
 
 from ..skills_runtime import load_skill, validate_output
 from ..tools.rules import load_rules
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 
 
-@lru_cache(maxsize=4)
-def load_rules_cached(profile: str) -> Dict[str, Any]:
-    rules, _ = load_rules(profile)
+def load_rules_cached(profile: str, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    rules, _ = load_rules(profile, config or DEFAULT_CONFIG)
     return rules
 
 

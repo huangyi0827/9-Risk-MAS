@@ -3,7 +3,7 @@ from __future__ import annotations
 from datetime import datetime
 from typing import Any, Dict, List
 
-import os
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 
 from ..state import RiskState
 from .csv_data import (
@@ -35,7 +35,9 @@ def _append_gap(
     return status
 
 
-def check_data_quality(state: RiskState) -> Dict[str, Any]:
+def check_data_quality(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    """检查数据完整性与新鲜度，生成 data_quality 与 data_gaps。"""
+    cfg = config or DEFAULT_CONFIG
     normalized = state.get("normalized") or {}
 
     universe = normalized.get("universe") or []
@@ -45,7 +47,7 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
     data_gaps: List[Dict[str, Any]] = []
     status = "ok"
 
-    sec_codes, _ = security_master_codes()
+    sec_codes, _ = security_master_codes(cfg)
     sec_checked = bool(sec_codes)
     if not sec_checked:
         status = _append_gap(
@@ -58,11 +60,11 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
 
     market_codes = set()
     market_checked = False
-    lookback_days = int(os.getenv("MARKET_LOOKBACK_DAYS", "60"))
+    lookback_days = int(cfg.market_lookback_days)
     start_date = lookback_start_date(asof_date, lookback_days)
 
     if universe:
-        metrics = market_metrics(universe, start_date or asof_date, asof_date)
+        metrics = market_metrics(universe, start_date or asof_date, asof_date, cfg)
         market_checked = True
         market_codes = set(metrics.keys())
 
@@ -87,9 +89,9 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
         )
 
     freshness_days = None
-    timeseries_available = bool(os.getenv("TUSHARE_TOKEN", "").strip())
-    macro_text_available = macro_docs_available()
-    macro_latest = macro_latest_date(asof_date or None)
+    timeseries_available = bool(cfg.tushare_token)
+    macro_text_available = macro_docs_available(cfg)
+    macro_latest = macro_latest_date(asof_date or None, cfg)
 
     if asof_date and macro_latest:
         try:
@@ -99,7 +101,7 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
         except ValueError:
             freshness_days = None
 
-    compliance_text_available = compliance_docs_available()
+    compliance_text_available = compliance_docs_available(cfg)
 
     if missing_market and len(missing_market) == len(universe):
         status = _append_gap(
@@ -110,7 +112,7 @@ def check_data_quality(state: RiskState) -> Dict[str, Any]:
             message="all universe instruments missing market data",
         )
 
-    macro_stale_days = int(os.getenv("MACRO_STALE_DAYS", "30"))
+    macro_stale_days = int(cfg.macro_stale_days)
     if freshness_days is None:
         freshness_status = "unknown"
     elif freshness_days < 0:

@@ -7,6 +7,7 @@ from typing import Any, Dict, Optional
 
 from .app import _build_minimal_view, _build_payload, _load_llm, _print_tables
 from .graph import build_graph
+from .config import RuntimeConfig, DEFAULT_CONFIG
 from .state import new_state
 
 
@@ -18,11 +19,13 @@ class RiskMAS:
         output: str = "table",
         pretty: bool = False,
         use_env_llm: bool = True,
+        config: RuntimeConfig | None = None,
     ) -> None:
+        self._config = config or DEFAULT_CONFIG
         if llm is None and use_env_llm:
-            llm = _load_llm()
+            llm = _load_llm(self._config)
         self._llm = llm
-        self._graph = build_graph(llm=llm)
+        self._graph = build_graph(llm=llm, config=self._config)
         self._output = output
         self._pretty = pretty
 

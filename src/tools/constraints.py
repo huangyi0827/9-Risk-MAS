@@ -3,17 +3,19 @@ from __future__ import annotations
 from typing import Dict, Any, List
 
 from ..state import RiskState
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 from .rules import load_rules
 
 
 _LEVEL = {"pass": 0, "warn": 1, "restrict": 2, "block": 3}
 
 
-def constraints_evaluator(state: RiskState) -> Dict[str, Any]:
+def constraints_evaluator(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    cfg = config or DEFAULT_CONFIG
     normalized = state.get("normalized") or {}
     metrics = state.get("snapshot_metrics") or {}
 
-    rules, _ = load_rules(normalized.get("policy_profile", "default"))
+    rules, _ = load_rules(normalized.get("policy_profile", "default"), cfg)
 
     findings: List[Dict[str, Any]] = []
 

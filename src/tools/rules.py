@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-import os
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Dict, Tuple
 
 import yaml
 
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 
 _DEFAULT_RULES = {
     "default": {
@@ -28,14 +28,20 @@ _DEFAULT_RULES = {
 }
 
 _ROOT = Path(__file__).resolve().parents[2]
-_RULES_BASE = Path(os.getenv("CSV_DATA_DIR", "")).expanduser() if os.getenv("CSV_DATA_DIR") else _ROOT / "cufel_practice_data"
-_RULES_PATH = _RULES_BASE / "rules.yaml"
 
 
-@lru_cache(maxsize=8)
-def _load_rules_cached(profile: str) -> Tuple[Dict[str, Any], str]:
-    if _RULES_PATH.exists():
-        data = yaml.safe_load(_RULES_PATH.read_text(encoding="utf-8")) or {}
+def _rules_path(config: RuntimeConfig | None = None) -> Path:
+    cfg = config or DEFAULT_CONFIG
+    if cfg.csv_data_dir:
+        return Path(cfg.csv_data_dir).expanduser() / "rules.yaml"
+    return _ROOT / "cufel_practice_data" / "rules.yaml"
+
+
+@lru_cache(maxsize=32)
+def _load_rules_cached(profile: str, path_str: str) -> Tuple[Dict[str, Any], str]:
+    path = Path(path_str)
+    if path.exists():
+        data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
         if isinstance(data, dict):
             if profile in data:
                 return dict(data.get(profile) or {}), "rules.yaml"
@@ -46,12 +52,13 @@ def _load_rules_cached(profile: str) -> Tuple[Dict[str, Any], str]:
     return fallback, "local-default"
 
 
-def load_rules(profile: str) -> Tuple[Dict[str, Any], str]:
-    rules, version = _load_rules_cached(profile)
+def load_rules(profile: str, config: RuntimeConfig | None = None) -> Tuple[Dict[str, Any], str]:
+    path = _rules_path(config)
+    rules, version = _load_rules_cached(profile, str(path))
     return dict(rules), version
 
 
-def get_blocklist(profile: str) -> Tuple[list, str]:
-    rules, version = load_rules(profile)
+def get_blocklist(profile: str, config: RuntimeConfig | None = None) -> Tuple[list, str]:
+    rules, version = load_rules(profile, config)
     blocklist = rules.get("blocklist") or []
     return list(blocklist), version

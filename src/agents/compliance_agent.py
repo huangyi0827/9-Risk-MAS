@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import csv
 from pathlib import Path
 from datetime import datetime, timezone
@@ -11,12 +10,12 @@ from typing import Any, Dict, List, Tuple
 import numpy as np
 from openai import OpenAI
 from langchain.agents import create_agent
-from langchain_core.messages import SystemMessage, HumanMessage
 
 from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
 from ..state import RiskState, Finding
 from ..tools.csv_data import etf_industry_map, etf_codes_by_industry
 from ..tools.rules import get_blocklist
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 from ..skills_runtime import load_skill, build_system_prompt, filter_tools, validate_output
 
 
@@ -29,9 +28,9 @@ def _provenance(source: str, params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _blocklist_payload(profile: str) -> Dict[str, Any]:
-    # TODO: replace with RAG-based blocklist retrieval from compliance corpus.
-    blocklist, ruleset_version = get_blocklist(profile)
+def _blocklist_payload(profile: str, runtime: RuntimeConfig) -> Dict[str, Any]:
+    # TODO: 改为基于合规语料的 RAG 方式生成禁投清单。
+    blocklist, ruleset_version = get_blocklist(profile, runtime)
     return {
         "items": list(blocklist),
         "source": ruleset_version,
@@ -42,24 +41,27 @@ def _blocklist_payload(profile: str) -> Dict[str, Any]:
 # ============ Embedding 客户端 ============
 
 _embedding_client: OpenAI | None = None
+_embedding_client_key: Tuple[str, str] | None = None
 
 
-def _get_embedding_client() -> OpenAI:
+def _get_embedding_client(runtime: RuntimeConfig) -> OpenAI:
     """获取或创建 embedding 客户端（复用 DashScope 配置）"""
-    global _embedding_client
-    if _embedding_client is None:
+    global _embedding_client, _embedding_client_key
+    key = (runtime.openai_api_key or "", runtime.openai_base_url or "")
+    if _embedding_client is None or _embedding_client_key != key:
         _embedding_client = OpenAI(
-            api_key=os.getenv("OPENAI_API_KEY"),
-            base_url=os.getenv("OPENAI_BASE_URL"),
+            api_key=runtime.openai_api_key or None,
+            base_url=runtime.openai_base_url or None,
         )
+        _embedding_client_key = key
     return _embedding_client
 
 
-def _get_embeddings(texts: List[str], model: str = "text-embedding-v4") -> np.ndarray:
+def _get_embeddings(texts: List[str], runtime: RuntimeConfig, model: str = "text-embedding-v4") -> np.ndarray:
     """批量获取文本的 embedding 向量"""
     if not texts:
         return np.array([])
-    client = _get_embedding_client()
+    client = _get_embedding_client(runtime)
     response = client.embeddings.create(input=texts, model=model)
     embeddings = [item.embedding for item in response.data]
     return np.array(embeddings)
@@ -77,8 +79,8 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 # ============ 文档缓存 ============
 
 _docs_cache: Dict[str, List[Dict[str, Any]]] = {}
-_embeddings_cache: Dict[str, np.ndarray] = {}
-_industry_embeddings_cache: Tuple[List[str], np.ndarray] | None = None
+_embeddings_cache: Dict[Tuple[str, str, str], np.ndarray] = {}
+_industry_embeddings_cache: Tuple[List[str], np.ndarray, Tuple[str, str]] | None = None
 
 
 def _get_cached_docs(path: Path) -> List[Dict[str, Any]]:
@@ -89,33 +91,39 @@ def _get_cached_docs(path: Path) -> List[Dict[str, Any]]:
     return _docs_cache[key]
 
 
-def _get_cached_embeddings(path: Path, docs: List[Dict[str, Any]]) -> np.ndarray:
+def _get_cached_embeddings(path: Path, docs: List[Dict[str, Any]], runtime: RuntimeConfig) -> np.ndarray:
     """获取缓存的文档 embeddings"""
-    key = str(path)
+    key = (str(path), runtime.openai_api_key or "", runtime.openai_base_url or "")
     if key not in _embeddings_cache:
         texts = [doc.get("text", "") for doc in docs]
-        _embeddings_cache[key] = _get_embeddings(texts)
+        _embeddings_cache[key] = _get_embeddings(texts, runtime)
     return _embeddings_cache[key]
 
 
-def _get_industry_embeddings(industries: List[str]) -> Tuple[List[str], np.ndarray]:
+def _get_industry_embeddings(industries: List[str], runtime: RuntimeConfig) -> Tuple[List[str], np.ndarray]:
     """获取缓存的行业名 embeddings"""
     global _industry_embeddings_cache
-    if _industry_embeddings_cache is None or _industry_embeddings_cache[0] != industries:
-        embeddings = _get_embeddings(industries)
-        _industry_embeddings_cache = (industries, embeddings)
-    return _industry_embeddings_cache
+    key = (runtime.openai_api_key or "", runtime.openai_base_url or "")
+    if (
+        _industry_embeddings_cache is None
+        or _industry_embeddings_cache[0] != industries
+        or _industry_embeddings_cache[2] != key
+    ):
+        embeddings = _get_embeddings(industries, runtime)
+        _industry_embeddings_cache = (industries, embeddings, key)
+    return _industry_embeddings_cache[0], _industry_embeddings_cache[1]
 
 
 # ============ 路径解析 ============
 
-def _resolve_rag_source(source: str) -> Path | None:
+def _resolve_rag_source(source: str, runtime: RuntimeConfig) -> Path | None:
     if not source:
         return None
     path = Path(source)
     if path.exists():
         return path
-    data_dir = Path(os.getenv("CSV_DATA_DIR", "") or Path(__file__).resolve().parents[2] / "cufel_practice_data")
+    base = runtime.csv_data_dir.strip()
+    data_dir = Path(base).expanduser() if base else Path(__file__).resolve().parents[2] / "cufel_practice_data"
     candidates = [
         data_dir / source,
         data_dir / f"{source}.csv",
@@ -203,14 +211,15 @@ def _vector_retrieve(
     docs: List[Dict[str, Any]],
     query: str,
     limit: int,
+    runtime: RuntimeConfig,
     min_score: float = 0.3,
 ) -> List[Dict[str, Any]]:
     """向量检索（使用 text-embedding-v4）"""
     if not query or not docs:
         return []
     try:
-        doc_embeddings = _get_cached_embeddings(path, docs)
-        query_embedding = _get_embeddings([query])[0]
+        doc_embeddings = _get_cached_embeddings(path, docs, runtime)
+        query_embedding = _get_embeddings([query], runtime)[0]
         scores = _cosine_similarity(query_embedding, doc_embeddings)
 
         # 按相似度排序，过滤低分结果
@@ -234,6 +243,7 @@ def _vector_retrieve(
 
 def _infer_industry_hits(
     hits: List[Dict[str, Any]],
+    runtime: RuntimeConfig,
     min_similarity: float = 0.5,
 ) -> List[str]:
     """从检索结果中推断相关行业，使用 embedding 相似度匹配。
@@ -242,7 +252,7 @@ def _infer_industry_hits(
         hits: 检索命中结果
         min_similarity: 最小相似度阈值（默认 0.5）
     """
-    mapping = etf_industry_map()
+    mapping = etf_industry_map(runtime)
     industries = sorted({v for v in mapping.values() if str(v).strip()})
     if not industries or not hits:
         return []
@@ -258,21 +268,30 @@ def _infer_industry_hits(
     if explicit:
         return sorted(explicit)
 
-    # 2. 使用 embedding 相似度匹配行业名
+    # 2. 使用 embedding 相似度匹配行业名（优化：批量获取 embeddings）
     try:
-        industry_names, industry_embeddings = _get_industry_embeddings(industries)
-        matched: set[str] = set()
-
-        for hit in hits:
+        industry_names, industry_embeddings = _get_industry_embeddings(industries, runtime)
+        
+        # 收集所有需要计算 embedding 的文本
+        texts_to_embed: List[str] = []
+        text_indices: List[int] = []  # 记录有效文本对应的 hit 索引
+        
+        for i, hit in enumerate(hits):
             meta = hit.get("meta") or {}
             text = f"{hit.get('snippet', '')} {meta.get('title', '')}".strip()
-            if not text:
-                continue
-
-            # 获取文本 embedding 并计算与各行业的相似度
-            text_embedding = _get_embeddings([text])[0]
+            if text:
+                texts_to_embed.append(text)
+                text_indices.append(i)
+        
+        if not texts_to_embed:
+            return []
+        
+        # 批量获取所有文本的 embeddings（一次 API 调用）
+        text_embeddings = _get_embeddings(texts_to_embed)
+        
+        matched: set[str] = set()
+        for text_embedding in text_embeddings:
             similarities = _cosine_similarity(text_embedding, industry_embeddings)
-
             # 找出超过阈值的行业
             for idx, sim in enumerate(similarities):
                 if sim >= min_similarity:
@@ -291,7 +310,12 @@ def _infer_industry_hits(
         return sorted(matched)
 
 
-def rag_search(query: str, limit: int = 5, source: str | None = None) -> Dict[str, Any]:
+def rag_search(
+    query: str,
+    limit: int = 5,
+    source: str | None = None,
+    runtime: RuntimeConfig | None = None,
+) -> Dict[str, Any]:
     """RAG 检索函数，支持向量检索和关键词检索。
 
     用法：
@@ -300,22 +324,23 @@ def rag_search(query: str, limit: int = 5, source: str | None = None) -> Dict[st
     - 设置 RAG_ENGINE=vector 启用向量检索（默认），=keyword 使用关键词检索。
     - 向量检索使用阿里云 text-embedding-v4 模型。
     """
-    source = (source or os.getenv("COMPLIANCE_RAG_SOURCE") or "").strip()
+    runtime = runtime or DEFAULT_CONFIG
+    source = (source or runtime.compliance_rag_source or "").strip()
     if not source:
         return {"hits": [], "source": "placeholder", "note": "rag_source_not_configured"}
-    path = _resolve_rag_source(source)
+    path = _resolve_rag_source(source, runtime)
     if path is None:
         return {"hits": [], "source": source, "note": "rag_source_not_found"}
 
     docs = _get_cached_docs(path)
-    engine = os.getenv("RAG_ENGINE", "vector").lower()
+    engine = (runtime.rag_engine or "vector").lower()
 
     if engine == "vector":
-        hits = _vector_retrieve(path, docs, query, limit)
+        hits = _vector_retrieve(path, docs, query, limit, runtime)
     else:
         hits = _keyword_retrieve(docs, query, limit)
-    industry_hits = _infer_industry_hits(hits)
-    industry_map = etf_codes_by_industry(industry_hits)
+    industry_hits = _infer_industry_hits(hits, runtime)
+    industry_map = etf_codes_by_industry(industry_hits, runtime)
     etf_blocklist = sorted({code for codes in industry_map.values() for code in codes})
 
     # 构建用于 LLM 上下文的文档引用
@@ -356,7 +381,7 @@ def _tool_arg_value(args: Tuple[Any, ...], kwargs: Dict[str, Any], key: str) -> 
     return None
 
 
-def _policy_search_impl(*args, **kwargs) -> Dict[str, Any]:
+def _policy_search_impl(runtime: RuntimeConfig, *args, **kwargs) -> Dict[str, Any]:
     """Search compliance docs for a query string.
 
     返回检索结果，包含：
@@ -368,7 +393,7 @@ def _policy_search_impl(*args, **kwargs) -> Dict[str, Any]:
     query = str(query or "").strip()
     if not query:
         return {"query": "", "hits": [], "context_for_llm": "", "industry_hits": [], "industry_blocklist": {}, "etf_blocklist": []}
-    payload = rag_search(query, limit=5)
+    payload = rag_search(query, limit=5, runtime=runtime)
     hits = payload.get("hits") or []
     # 简化 hits 返回给 LLM（移除 full_text 以节省 token）
     simplified_hits = [
@@ -393,12 +418,12 @@ def _policy_search_impl(*args, **kwargs) -> Dict[str, Any]:
     }
 
 
-def _allowlist_check_impl(*args, **kwargs) -> Dict[str, Any]:
+def _allowlist_check_impl(runtime: RuntimeConfig, *args, **kwargs) -> Dict[str, Any]:
     """Check if a code is allowed by policy."""
     code = _tool_arg_value(args, kwargs, "code")
     profile = kwargs.get("profile") or (args[1] if len(args) > 1 else "default")
     code = str(code or "").strip()
-    payload = _blocklist_payload(profile)
+    payload = _blocklist_payload(profile, runtime)
     blocked = payload.get("items") or []
     allowed = code not in blocked if code else False
     return {
@@ -409,36 +434,25 @@ def _allowlist_check_impl(*args, **kwargs) -> Dict[str, Any]:
     }
 
 
-policy_search = wrap_tool("policy_search", _policy_search_impl)
-allowlist_check = wrap_tool("allowlist_check", _allowlist_check_impl)
+def _policy_search_tool(runtime: RuntimeConfig):
+    def _impl(*args, **kwargs):
+        return _policy_search_impl(runtime, *args, **kwargs)
+    return wrap_tool("policy_search", _impl)
+
+
+def _allowlist_check_tool(runtime: RuntimeConfig):
+    def _impl(*args, **kwargs):
+        return _allowlist_check_impl(runtime, *args, **kwargs)
+    return wrap_tool("allowlist_check", _impl)
 
 
 def _llm_model_name(llm) -> str:
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or "")
 
-def _llm_risk_label(llm, context: str) -> Dict[str, str]:
-    if not context:
-        return {"label": "unknown", "rationale": "empty_context"}
-    system = SystemMessage(
-        "你是合规风险判别器。根据提供的合规文本判断风险等级，仅返回JSON。"
-        "label 取值：high / medium / low / irrelevant / unknown。"
-    )
-    user = HumanMessage(
-        "请基于以下合规文本判断风险等级，并给出一句理由：\n"
-        f"{context}\n\n"
-        "返回格式：{\"label\":\"high|medium|low|irrelevant|unknown\",\"rationale\":\"...\"}"
-    )
-    try:
-        resp = llm.invoke([system, user])
-        content = resp.content if hasattr(resp, "content") else str(resp)
-        parsed = json.loads(content)
-        label = str(parsed.get("label", "unknown")).lower()
-        rationale = str(parsed.get("rationale", "")).strip()
-        if label not in {"high", "medium", "low", "irrelevant", "unknown"}:
-            label = "unknown"
-        return {"label": label, "rationale": rationale}
-    except Exception:
-        return {"label": "unknown", "rationale": "parse_or_call_failed"}
+def _build_policy_query(normalized: Dict[str, Any]) -> str:
+    jurisdiction = str(normalized.get("jurisdiction") or "CN").strip()
+    account_type = str(normalized.get("account_type") or "brokerage").strip()
+    return f"ETF blocklist for {jurisdiction} {account_type} account"
 
 
 def _extract_rag_blocklist(
@@ -514,13 +528,28 @@ def _fallback_finding(
     }
 
 
-def run_compliance_agent(state: RiskState, llm) -> Dict[str, Any]:
+def run_compliance_agent(state: RiskState, llm, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    """运行合规 Agent：基于检索上下文输出结构化结论。"""
+    runtime = config or DEFAULT_CONFIG
     normalized = state.get("normalized") or {}
     profile = normalized.get("policy_profile", "default")
-    blocklist_payload = _blocklist_payload(profile)
+    blocklist_payload = _blocklist_payload(profile, runtime)
     hard_blocklist = blocklist_payload.get("items") or []
     soft_blocklist: List[str] = []
     industry_hits: List[str] = []
+    targets = normalized.get("target_weights") or {}
+    blocked_targets = [c for c in targets if c in hard_blocklist]
+
+    if blocked_targets:
+        return {
+            "finding_compliance": _fallback_finding(state, hard_blocklist, soft_blocklist, industry_hits),
+            "compliance_blocklist": hard_blocklist,
+            "compliance_blocklist_soft": soft_blocklist,
+            "compliance_blocklist_meta": blocklist_payload,
+            "tool_calls_compliance": [],
+            "llm_used_compliance": False,
+            "llm_model_compliance": "",
+        }
 
     if llm is None:
         return {
@@ -534,6 +563,9 @@ def run_compliance_agent(state: RiskState, llm) -> Dict[str, Any]:
         }
 
     skill = load_skill("compliance-evidence")
+    query = _build_policy_query(normalized)
+    policy_search = _policy_search_tool(runtime)
+    allowlist_check = _allowlist_check_tool(runtime)
     tools = filter_tools([policy_search, allowlist_check], skill.allowlist)
     if not tools:
         return {
@@ -553,6 +585,7 @@ def run_compliance_agent(state: RiskState, llm) -> Dict[str, Any]:
         "normalized": normalized,
         "snapshot_metrics": state.get("snapshot_metrics") or {},
         "policy_profile": profile,
+        "policy_query": query,
     }
     user_payload = json.dumps(payload, separators=(",", ":"))
     result = agent.invoke({"messages": [{"role": "user", "content": f"Input state: {user_payload}"}]})
@@ -560,20 +593,29 @@ def run_compliance_agent(state: RiskState, llm) -> Dict[str, Any]:
 
     messages = result.get("messages", []) if isinstance(result, dict) else []
     tool_calls = extract_tool_calls(messages)
+    if not any(call.get("tool") == "policy_search" for call in tool_calls):
+        tool_calls.append({"tool": "policy_search_required", "error": "missing_policy_search"})
+        return {
+            "finding_compliance": _fallback_finding(state, hard_blocklist, soft_blocklist, industry_hits),
+            "compliance_blocklist": hard_blocklist,
+            "compliance_blocklist_soft": soft_blocklist,
+            "compliance_blocklist_meta": blocklist_payload,
+            "tool_calls_compliance": tool_calls,
+            "llm_used_compliance": True,
+            "llm_model_compliance": llm_model,
+        }
+
     extra_blocklist, industry_hits, rag_context = _extract_rag_blocklist(tool_calls)
-    risk_label = {"label": "unknown", "rationale": ""}
-    if rag_context:
-        risk_label = _llm_risk_label(llm, rag_context)
-    if extra_blocklist and risk_label.get("label") in {"high", "medium"}:
-        soft_blocklist = extra_blocklist
-        blocklist_payload = {
-            **blocklist_payload,
-            "soft_items": soft_blocklist,
-            "industry_hits": industry_hits,
-            "industry_blocklist": soft_blocklist,
-            "industry_source": "indx_csname",
-            "rag_context": rag_context,
-            "risk_label": risk_label,
+    if not rag_context:
+        tool_calls.append({"tool": "policy_search_required", "error": "missing_rag_context"})
+        return {
+            "finding_compliance": _fallback_finding(state, hard_blocklist, soft_blocklist, industry_hits),
+            "compliance_blocklist": hard_blocklist,
+            "compliance_blocklist_soft": soft_blocklist,
+            "compliance_blocklist_meta": blocklist_payload,
+            "tool_calls_compliance": tool_calls,
+            "llm_used_compliance": True,
+            "llm_model_compliance": llm_model,
         }
 
     output = last_ai_content(messages)
@@ -604,16 +646,20 @@ def run_compliance_agent(state: RiskState, llm) -> Dict[str, Any]:
         "recommendations": parsed.get("recommendations", []),
         "policy_ids": parsed.get("policy_ids", []),
     }
+    if extra_blocklist and int(finding.get("severity", 0)) >= 1:
+        soft_blocklist = extra_blocklist
+        blocklist_payload = {
+            **blocklist_payload,
+            "soft_items": soft_blocklist,
+            "industry_hits": industry_hits,
+            "industry_source": "indx_csname",
+        }
     if soft_blocklist:
         finding["severity"] = max(int(finding.get("severity", 0)), 1)
         extra_evidence = [
             {"ref": "tool:compliance_blocklist_soft", "value": soft_blocklist},
             {"ref": "tool:compliance_industry_hits", "value": industry_hits},
         ]
-        if rag_context:
-            extra_evidence.append({"ref": "rag:compliance_docs", "value": rag_context})
-        if risk_label.get("label") in {"high", "medium", "low", "irrelevant", "unknown"}:
-            extra_evidence.append({"ref": "rag:compliance_risk_label", "value": risk_label})
         finding["evidence"] = list(finding.get("evidence") or []) + extra_evidence
         if "soft_blocklist" not in (finding.get("policy_ids") or []):
             finding["policy_ids"] = list(finding.get("policy_ids") or []) + ["soft_blocklist"]

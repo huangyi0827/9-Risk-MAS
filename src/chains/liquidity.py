@@ -4,15 +4,16 @@ from typing import Dict, Any
 
 from ..state import RiskState, Finding
 from .common import load_rules_cached, validate_finding
+from ..config import RuntimeConfig
 
 
-def liquidity_chain(state: RiskState) -> Dict[str, Any]:
+def liquidity_chain(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
     metrics = state.get("snapshot_metrics") or {}
     spread = float(metrics.get("weighted_spread_bps", 0.0))
     adv = float(metrics.get("weighted_adv", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules = load_rules_cached(profile)
+    rules = load_rules_cached(profile, config)
     spread_warn = float(rules.get("spread_warn", 40))
     spread_restrict = float(rules.get("spread_restrict", 60))
     adv_warn = float(rules.get("adv_warn", 5_000_000))

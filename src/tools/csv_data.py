@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import random
 from functools import lru_cache
 from pathlib import Path
@@ -10,14 +9,15 @@ from typing import Any, Dict, Iterable, List, Tuple
 import numpy as np
 import pandas as pd
 
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 
 _ROOT = Path(__file__).resolve().parents[2]
 
 
-def _data_dir() -> Path:
-    configured = os.getenv("CSV_DATA_DIR", "").strip()
-    if configured:
-        return Path(configured)
+def _data_dir(config: RuntimeConfig | None = None) -> Path:
+    cfg = config or DEFAULT_CONFIG
+    if cfg.csv_data_dir:
+        return Path(cfg.csv_data_dir)
     return _ROOT / "cufel_practice_data"
 
 
@@ -27,9 +27,9 @@ def _load_csv(path: Path, *, usecols: Iterable[str] | None = None) -> pd.DataFra
     return pd.read_csv(path, usecols=usecols)
 
 
-@lru_cache(maxsize=1)
-def load_etf_prices() -> pd.DataFrame:
-    path = _data_dir() / "etf_2025_data.csv"
+@lru_cache(maxsize=4)
+def _load_etf_prices_cached(path_str: str) -> pd.DataFrame:
+    path = Path(path_str)
     df = _load_csv(path)
     if df.empty:
         return df
@@ -43,9 +43,14 @@ def load_etf_prices() -> pd.DataFrame:
     return df
 
 
-@lru_cache(maxsize=1)
-def load_etf_basic() -> pd.DataFrame:
-    path = _data_dir() / "sampled_etf_basic.csv"
+def load_etf_prices(config: RuntimeConfig | None = None) -> pd.DataFrame:
+    path = _data_dir(config) / "etf_2025_data.csv"
+    return _load_etf_prices_cached(str(path))
+
+
+@lru_cache(maxsize=4)
+def _load_etf_basic_cached(path_str: str) -> pd.DataFrame:
+    path = Path(path_str)
     df = _load_csv(path)
     if df.empty:
         return df
@@ -54,9 +59,14 @@ def load_etf_basic() -> pd.DataFrame:
     return df
 
 
-@lru_cache(maxsize=1)
-def etf_industry_map() -> Dict[str, str]:
-    basic = load_etf_basic()
+def load_etf_basic(config: RuntimeConfig | None = None) -> pd.DataFrame:
+    path = _data_dir(config) / "sampled_etf_basic.csv"
+    return _load_etf_basic_cached(str(path))
+
+
+@lru_cache(maxsize=4)
+def _etf_industry_map_cached(path_str: str) -> Dict[str, str]:
+    basic = _load_etf_basic_cached(path_str)
     if basic.empty or "code" not in basic.columns or "indx_csname" not in basic.columns:
         return {}
     df = basic[["code", "indx_csname"]].dropna()
@@ -69,8 +79,13 @@ def etf_industry_map() -> Dict[str, str]:
     return mapping
 
 
-def etf_codes_by_industry(industry_names: Iterable[str]) -> Dict[str, List[str]]:
-    mapping = etf_industry_map()
+def etf_industry_map(config: RuntimeConfig | None = None) -> Dict[str, str]:
+    path = _data_dir(config) / "sampled_etf_basic.csv"
+    return _etf_industry_map_cached(str(path))
+
+
+def etf_codes_by_industry(industry_names: Iterable[str], config: RuntimeConfig | None = None) -> Dict[str, List[str]]:
+    mapping = etf_industry_map(config)
     if not mapping:
         return {}
     wanted = {str(name).strip() for name in industry_names if str(name).strip()}
@@ -83,9 +98,9 @@ def etf_codes_by_industry(industry_names: Iterable[str]) -> Dict[str, List[str]]
     return reverse
 
 
-@lru_cache(maxsize=1)
-def load_compliance_docs() -> pd.DataFrame:
-    path = _data_dir() / "csrc_2025.csv"
+@lru_cache(maxsize=4)
+def _load_compliance_docs_cached(path_str: str) -> pd.DataFrame:
+    path = Path(path_str)
     df = _load_csv(path)
     if df.empty:
         return df
@@ -98,9 +113,14 @@ def load_compliance_docs() -> pd.DataFrame:
     return df
 
 
-@lru_cache(maxsize=1)
-def load_macro_docs() -> pd.DataFrame:
-    results_path = _data_dir() / "govcn_2025_results.json"
+def load_compliance_docs(config: RuntimeConfig | None = None) -> pd.DataFrame:
+    path = _data_dir(config) / "csrc_2025.csv"
+    return _load_compliance_docs_cached(str(path))
+
+
+@lru_cache(maxsize=4)
+def _load_macro_docs_cached(results_str: str, csv_str: str) -> pd.DataFrame:
+    results_path = Path(results_str)
     if results_path.exists():
         try:
             raw = json.loads(results_path.read_text(encoding="utf-8"))
@@ -154,7 +174,7 @@ def load_macro_docs() -> pd.DataFrame:
                         df[col] = df[col].astype(str)
                 return df
 
-    path = _data_dir() / "govcn_2025.csv"
+    path = Path(csv_str)
     df = _load_csv(path)
     if df.empty:
         return df
@@ -167,18 +187,23 @@ def load_macro_docs() -> pd.DataFrame:
     return df
 
 
-def security_master_codes() -> Tuple[set, str]:
-    basic = load_etf_basic()
+def load_macro_docs(config: RuntimeConfig | None = None) -> pd.DataFrame:
+    base = _data_dir(config)
+    return _load_macro_docs_cached(str(base / "govcn_2025_results.json"), str(base / "govcn_2025.csv"))
+
+
+def security_master_codes(config: RuntimeConfig | None = None) -> Tuple[set, str]:
+    basic = load_etf_basic(config)
     if not basic.empty and "code" in basic.columns:
         return set(basic["code"].dropna().astype(str)), "sampled_etf_basic.csv"
-    prices = load_etf_prices()
+    prices = load_etf_prices(config)
     if not prices.empty:
         return set(prices["code"].dropna().astype(str)), "etf_2025_data.csv"
     return set(), "missing"
 
 
-def sample_universe(asof_date: str, size: int, seed: str | None) -> List[str]:
-    df = load_etf_prices()
+def sample_universe(asof_date: str, size: int, seed: str | None, config: RuntimeConfig | None = None) -> List[str]:
+    df = load_etf_prices(config)
     if df.empty:
         return []
     if asof_date:
@@ -203,10 +228,10 @@ def lookback_start_date(asof_date: str, lookback_days: int) -> str:
     return (cutoff - pd.Timedelta(days=int(lookback_days))).date().isoformat()
 
 
-def previous_trading_date(asof_date: str) -> str:
+def previous_trading_date(asof_date: str, config: RuntimeConfig | None = None) -> str:
     if not asof_date:
         return ""
-    df = load_etf_prices()
+    df = load_etf_prices(config)
     if df.empty or "date" not in df.columns:
         return asof_date
     cutoff = pd.to_datetime(asof_date, errors="coerce")
@@ -225,11 +250,12 @@ def market_metrics(
     codes: Iterable[str],
     start_date: str | None,
     end_date: str | None,
+    config: RuntimeConfig | None = None,
 ) -> Dict[str, Dict[str, float]]:
     code_set = {str(c) for c in codes if str(c).strip()}
     if not code_set:
         return {}
-    df = load_etf_prices()
+    df = load_etf_prices(config)
     if df.empty:
         return {}
     df = df[df["code"].isin(code_set)]
@@ -273,26 +299,28 @@ def market_metrics(
     return metrics
 
 
-def market_metrics_by_range(start_date: str, end_date: str) -> Tuple[List[str], Dict[str, Dict[str, float]]]:
-    df = load_etf_prices()
+def market_metrics_by_range(
+    start_date: str, end_date: str, config: RuntimeConfig | None = None
+) -> Tuple[List[str], Dict[str, Dict[str, float]]]:
+    df = load_etf_prices(config)
     if df.empty:
         return [], {}
     df = df[(df["date"] >= start_date) & (df["date"] <= end_date)]
     if df.empty:
         return [], {}
     codes = list(dict.fromkeys(df["code"].dropna().astype(str).tolist()))
-    metrics = market_metrics(codes, start_date, end_date)
+    metrics = market_metrics(codes, start_date, end_date, config)
     codes = [c for c in codes if c in metrics]
     return codes, metrics
 
 
-def macro_docs_available() -> bool:
-    df = load_macro_docs()
+def macro_docs_available(config: RuntimeConfig | None = None) -> bool:
+    df = load_macro_docs(config)
     return not df.empty
 
 
-def compliance_docs_available() -> bool:
-    df = load_compliance_docs()
+def compliance_docs_available(config: RuntimeConfig | None = None) -> bool:
+    df = load_compliance_docs(config)
     return not df.empty
 
 
@@ -309,8 +337,13 @@ def _text_mask(df: pd.DataFrame, query: str, columns: Iterable[str]) -> pd.Serie
     return mask
 
 
-def macro_search_hits(query: str, limit: int = 5, asof_date: str | None = None) -> List[Dict[str, Any]]:
-    df = load_macro_docs()
+def macro_search_hits(
+    query: str,
+    limit: int = 5,
+    asof_date: str | None = None,
+    config: RuntimeConfig | None = None,
+) -> List[Dict[str, Any]]:
+    df = load_macro_docs(config)
     if df.empty or not query:
         return []
     if asof_date and "date" in df.columns:
@@ -345,8 +378,8 @@ def macro_search_hits(query: str, limit: int = 5, asof_date: str | None = None) 
     return results
 
 
-def compliance_search_hits(query: str, limit: int = 5) -> List[str]:
-    df = load_compliance_docs()
+def compliance_search_hits(query: str, limit: int = 5, config: RuntimeConfig | None = None) -> List[str]:
+    df = load_compliance_docs(config)
     if df.empty or not query:
         return []
     mask = _text_mask(df, query, ("title", "content"))
@@ -356,8 +389,8 @@ def compliance_search_hits(query: str, limit: int = 5) -> List[str]:
     return [str(row.get("content") or "") for _, row in hits.iterrows()]
 
 
-def macro_latest_date(asof_date: str | None = None) -> str:
-    df = load_macro_docs()
+def macro_latest_date(asof_date: str | None = None, config: RuntimeConfig | None = None) -> str:
+    df = load_macro_docs(config)
     if df.empty or "date" not in df.columns:
         return ""
     if asof_date:

@@ -4,15 +4,16 @@ from typing import Dict, Any
 
 from ..state import RiskState, Finding
 from .common import load_rules_cached, validate_finding
+from ..config import RuntimeConfig
 
 
-def concentration_chain(state: RiskState) -> Dict[str, Any]:
+def concentration_chain(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
     metrics = state.get("snapshot_metrics") or {}
     hhi = float(metrics.get("hhi", 0.0))
     top_weight = float(metrics.get("top_weight", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules = load_rules_cached(profile)
+    rules = load_rules_cached(profile, config)
     hhi_warn = float(rules.get("hhi_warn", 0.25))
     hhi_restrict = float(rules.get("hhi_restrict", 0.35))
     top_warn = float(rules.get("top_weight_warn", 0.3))

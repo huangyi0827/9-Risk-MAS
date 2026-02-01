@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import Dict, Any, Tuple
 
 from ..state import RiskState
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 from ..tools.csv_data import previous_trading_date
 
 
@@ -36,7 +37,8 @@ def _validate_date(date_str: str) -> Tuple[bool, str]:
         return False, f"invalid date: {exc}"
 
 
-def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
+def validate_and_normalize(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    cfg = config or DEFAULT_CONFIG
     intent = state.get("intent") or {}
     context = state.get("context") or {}
 
@@ -80,7 +82,7 @@ def validate_and_normalize(state: RiskState) -> Dict[str, Any]:
     if not universe:
         universe = list(target_weights.keys())
 
-    asof_date = previous_trading_date(date_str)
+    asof_date = previous_trading_date(date_str, cfg)
     normalized = {
         "asof_date": asof_date,
         "mode": mode,

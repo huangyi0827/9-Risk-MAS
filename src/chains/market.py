@@ -4,14 +4,15 @@ from typing import Dict, Any
 
 from ..state import RiskState, Finding
 from .common import load_rules_cached, validate_finding
+from ..config import RuntimeConfig
 
 
-def market_risk_chain(state: RiskState) -> Dict[str, Any]:
+def market_risk_chain(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
     metrics = state.get("snapshot_metrics") or {}
     vol = float(metrics.get("portfolio_volatility", 0.0))
 
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules = load_rules_cached(profile)
+    rules = load_rules_cached(profile, config)
     vol_warn = float(rules.get("volatility_warn", 0.15))
     vol_restrict = float(rules.get("volatility_restrict", 0.25))
 

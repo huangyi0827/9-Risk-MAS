@@ -7,6 +7,7 @@ from langgraph.types import Send
 from langchain_core.runnables import RunnableLambda
 
 from .state import RiskState
+from .config import RuntimeConfig, DEFAULT_CONFIG
 from .tools import (
     validate_and_normalize,
     check_data_quality,
@@ -36,41 +37,43 @@ def _should_run_node(state: RiskState, name: str) -> bool:
     return name in pending
 
 
-def build_graph(llm=None):
+def build_graph(llm=None, config: RuntimeConfig | None = None):
+    """构建并返回主工作流图（含并行分析与审计链路）。"""
+    cfg = config or DEFAULT_CONFIG
     g = StateGraph(RiskState)
 
     # ===== Pipeline nodes =====
     def validate_node(state: RiskState) -> Dict[str, Any]:
-        return validate_and_normalize(state)
+        return validate_and_normalize(state, cfg)
 
     def data_quality_node(state: RiskState) -> Dict[str, Any]:
-        return check_data_quality(state)
+        return check_data_quality(state, cfg)
 
     def snapshot_node(state: RiskState) -> Dict[str, Any]:
-        return risk_snapshot_bundle(state)
+        return risk_snapshot_bundle(state, cfg)
 
     def constraints_node(state: RiskState) -> Dict[str, Any]:
-        return constraints_evaluator(state)
+        return constraints_evaluator(state, cfg)
 
     def gatekeeper_node(state: RiskState) -> Dict[str, Any]:
         return gatekeeper_chain(state)
 
     def supervisor_node(state: RiskState) -> Dict[str, Any]:
         candidates = state.get("candidate_nodes") or []
-        return supervisor_chain(state, llm, candidates)
+        return supervisor_chain(state, llm, candidates, cfg)
 
     # ===== Analysis nodes (deterministic chains) =====
     analysis_nodes = {
-        "market": market_risk_chain,
-        "concentration": concentration_chain,
-        "diversification": diversification_chain,
-        "liquidity": liquidity_chain,
+        "market": lambda state: market_risk_chain(state, cfg),
+        "concentration": lambda state: concentration_chain(state, cfg),
+        "diversification": lambda state: diversification_chain(state, cfg),
+        "liquidity": lambda state: liquidity_chain(state, cfg),
     }
 
     # ===== Agent nodes (LLM-based) =====
     agent_nodes = {
-        "macro": lambda state: run_macro_agent(state, llm),
-        "compliance": lambda state: run_compliance_agent(state, llm),
+        "macro": lambda state: run_macro_agent(state, llm, cfg),
+        "compliance": lambda state: run_compliance_agent(state, llm, cfg),
     }
 
     all_analysis_nodes = {**analysis_nodes, **agent_nodes}
@@ -95,10 +98,10 @@ def build_graph(llm=None):
         return decision_engine(state)
 
     def solver_node(state: RiskState) -> Dict[str, Any]:
-        return constraint_solver(state)
+        return constraint_solver(state, cfg)
 
     def audit_node(state: RiskState) -> Dict[str, Any]:
-        return audit_log(state)
+        return audit_log(state, cfg)
 
     # ===== Parallel dispatch using LangGraph Send API =====
     def dispatch_to_parallel(state: RiskState) -> List[Send]:

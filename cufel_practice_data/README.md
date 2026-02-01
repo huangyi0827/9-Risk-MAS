@@ -8,8 +8,8 @@
   - 必需字段：`date, code, open, high, low, close, vol, amount`  
   - 可选字段：`pre_close, change, pct_chg, adj_factor`  
   - 说明：若提供 `adj_factor`，波动率使用复权价计算。
-- `sampled_etf_basic.csv`：`code`（可含其他描述字段）
-- `csrc_2025.csv`：`title, date, content, from`（合规文本）
+- `sampled_etf_basic.csv`：`code, indx_csname`（合规行业映射使用 `indx_csname`）
+- `csrc_2025.csv`：`title, date, content, from`（合规文本；如补充 `industry_name` 可提升行业命中准确度）
 - `govcn_2025.csv`：`title, date, content, industry_name`（宏观文本）
 - `govcn_2025_results.json`：宏观情绪分析结果
 - `macro_series.yaml`：宏观时序配置（Tushare，可选）

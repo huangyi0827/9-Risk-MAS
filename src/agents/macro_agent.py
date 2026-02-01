@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
 import time
 from datetime import datetime, timezone, timedelta
 from functools import lru_cache
@@ -15,6 +14,7 @@ from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
 from ..state import RiskState, Finding
 from ..tools.csv_data import macro_search_hits
 from ..skills_runtime import load_skill, build_system_prompt, filter_tools, validate_output
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 import tushare as ts
 
 def _provenance(source: str, params: Dict[str, Any]) -> Dict[str, Any]:
@@ -29,14 +29,16 @@ def _provenance(source: str, params: Dict[str, Any]) -> Dict[str, Any]:
 _ROOT = Path(__file__).resolve().parents[2]
 
 
-@lru_cache(maxsize=1)
-def _load_macro_series_config() -> Dict[str, Any]:
-    override = os.getenv("MACRO_SERIES_CONFIG", "").strip()
-    if override:
-        path = Path(override).expanduser()
-    else:
-        base = Path(os.getenv("CSV_DATA_DIR", "")).expanduser() if os.getenv("CSV_DATA_DIR") else _ROOT / "cufel_practice_data"
-        path = base / "macro_series.yaml"
+def _macro_series_path(config: RuntimeConfig) -> Path:
+    if config.macro_series_config:
+        return Path(config.macro_series_config).expanduser()
+    base = Path(config.csv_data_dir).expanduser() if config.csv_data_dir else _ROOT / "cufel_practice_data"
+    return base / "macro_series.yaml"
+
+
+@lru_cache(maxsize=8)
+def _load_macro_series_config(path_str: str) -> Dict[str, Any]:
+    path = Path(path_str)
     if not path.exists():
         raise SystemExit(f"macro series config not found: {path}")
     data = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
@@ -77,7 +79,7 @@ def _format_tushare_year_start(value: str) -> str:
 
 
 def _tushare_timeseries_from_config(
-    series: str, config: Dict[str, Any], asof_date: str = ""
+    series: str, config: Dict[str, Any], asof_date: str, runtime: RuntimeConfig
 ) -> Tuple[Dict[str, Any], str | None]:
     """Fetch timeseries from Tushare API.
 
@@ -86,7 +88,7 @@ def _tushare_timeseries_from_config(
         config: Series configuration from macro_series.yaml
         asof_date: Reference date for data alignment (thread-safe parameter)
     """
-    token = os.getenv("TUSHARE_TOKEN", "").strip()
+    token = runtime.tushare_token
     if not token:
         raise SystemExit("TUSHARE_TOKEN not configured")
 
@@ -203,14 +205,14 @@ def _tushare_timeseries_from_config(
     return payload, None
 
 
-def _macro_timeseries_impl(series: str, asof_date: str = "") -> Dict[str, Any]:
+def _macro_timeseries_impl(series: str, asof_date: str, runtime: RuntimeConfig) -> Dict[str, Any]:
     """Return simplified macro time series samples.
 
     Args:
         series: Series identifier
         asof_date: Reference date for data alignment (thread-safe parameter)
     """
-    config = _load_macro_series_config().get(series)
+    config = _load_macro_series_config(str(_macro_series_path(runtime))).get(series)
     if not config:
         return {
             "series": series,
@@ -218,7 +220,7 @@ def _macro_timeseries_impl(series: str, asof_date: str = "") -> Dict[str, Any]:
             "provenance": _provenance("tushare", {"series": series, "error": "series not configured"}),
         }
 
-    payload, err = _tushare_timeseries_from_config(series, config, asof_date)
+    payload, err = _tushare_timeseries_from_config(series, config, asof_date, runtime)
     if err:
         return {
             "series": series,
@@ -235,14 +237,14 @@ def _macro_timeseries_impl(series: str, asof_date: str = "") -> Dict[str, Any]:
     }
 
 
-def _macro_search_impl(query: str, asof_date: str = "") -> Dict[str, Any]:
+def _macro_search_impl(query: str, asof_date: str, runtime: RuntimeConfig) -> Dict[str, Any]:
     """Lightweight search over macro documents.
 
     Args:
         query: Search query string
         asof_date: Reference date for filtering results (thread-safe parameter)
     """
-    hits = macro_search_hits(query, limit=5, asof_date=asof_date or None)
+    hits = macro_search_hits(query, limit=5, asof_date=asof_date or None, config=runtime)
     return {
         "query": query,
         "hits": hits,
@@ -257,7 +259,7 @@ def _macro_search_impl(query: str, asof_date: str = "") -> Dict[str, Any]:
 # asof_date is now passed as a parameter to all functions that need it
 
 
-def _create_tools_with_asof_date(asof_date: str):
+def _create_tools_with_asof_date(asof_date: str, runtime: RuntimeConfig):
     """Create tool instances bound to a specific asof_date.
 
     This factory function creates thread-safe tool instances by capturing
@@ -270,10 +272,10 @@ def _create_tools_with_asof_date(asof_date: str):
         Tuple of (macro_timeseries_tool, macro_search_tool)
     """
     def timeseries_impl(series: str) -> Dict[str, Any]:
-        return _macro_timeseries_impl(series, asof_date)
+        return _macro_timeseries_impl(series, asof_date, runtime)
 
     def search_impl(query: str) -> Dict[str, Any]:
-        return _macro_search_impl(query, asof_date)
+        return _macro_search_impl(query, asof_date, runtime)
 
     return (
         wrap_tool("macro_timeseries", timeseries_impl),
@@ -299,8 +301,10 @@ def _llm_model_name(llm) -> str:
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or "")
 
 
-def _prefetch_macro_timeseries(asof_date: str = "") -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
-    series_cfg = _load_macro_series_config()
+def _prefetch_macro_timeseries(
+    asof_date: str, runtime: RuntimeConfig
+) -> Tuple[List[Dict[str, Any]], Dict[str, Any]]:
+    series_cfg = _load_macro_series_config(str(_macro_series_path(runtime)))
     series_list = list(series_cfg.keys())
     if not series_list:
         raise SystemExit("macro series config contains no series")
@@ -311,7 +315,7 @@ def _prefetch_macro_timeseries(asof_date: str = "") -> Tuple[List[Dict[str, Any]
         start = time.monotonic()
         error = None
         try:
-            output = _macro_timeseries_impl(series, asof_date)
+            output = _macro_timeseries_impl(series, asof_date, runtime)
         except Exception as exc:  # pragma: no cover - runtime tool errors
             error = repr(exc)
             output = {"error": error}
@@ -378,18 +382,19 @@ def _nlp_severity_from_tool_calls(tool_calls: List[Dict[str, Any]]) -> int | Non
     return severity
 
 
-def _blend_severity(macro_severity: int, nlp_severity: int | None) -> int:
+def _blend_severity(macro_severity: int, nlp_severity: int | None, runtime: RuntimeConfig) -> int:
     if nlp_severity is None:
         return int(macro_severity)
-    blended = round(0.7 * float(macro_severity) + 0.3 * float(nlp_severity))
+    weight = float(runtime.macro_severity_weight)
+    blended = round(weight * float(macro_severity) + (1.0 - weight) * float(nlp_severity))
     return max(0, min(3, int(blended)))
 
 
-def _compute_macro_severity(tool_results: Dict[str, Any]) -> int:
+def _compute_macro_severity(tool_results: Dict[str, Any], runtime: RuntimeConfig) -> int:
     series_results = tool_results.get("macro_timeseries") or {}
     if not isinstance(series_results, dict):
         return 0
-    config = _load_macro_series_config()
+    config = _load_macro_series_config(str(_macro_series_path(runtime)))
     severity = 0
     for series, output in series_results.items():
         if not isinstance(output, dict):
@@ -425,7 +430,9 @@ def _compute_macro_severity(tool_results: Dict[str, Any]) -> int:
     return severity
 
 
-def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
+def run_macro_agent(state: RiskState, llm, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    """运行宏观 Agent：先取时序并计算 severity，必要时再补文本上下文。"""
+    runtime = config or DEFAULT_CONFIG
     normalized = state.get("normalized") or {}
     asof_date = str(normalized.get("asof_date") or "")
 
@@ -440,8 +447,8 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
             "snapshot_metrics": snapshot,
         }
 
-    prefetched_calls, prefetched_results = _prefetch_macro_timeseries(asof_date)
-    macro_severity = _compute_macro_severity(prefetched_results)
+    prefetched_calls, prefetched_results = _prefetch_macro_timeseries(asof_date, runtime)
+    macro_severity = _compute_macro_severity(prefetched_results, runtime)
     snapshot = state.get("snapshot_metrics") or {}
     updated_snapshot = dict(snapshot)
     updated_snapshot["macro_severity"] = macro_severity
@@ -457,7 +464,7 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
         }
 
     skill = load_skill("macro-tool-calling")
-    macro_timeseries, macro_search = _create_tools_with_asof_date(asof_date)
+    macro_timeseries, macro_search = _create_tools_with_asof_date(asof_date, runtime)
     tools = filter_tools([macro_timeseries, macro_search], skill.allowlist)
     if not tools:
         return {
@@ -494,7 +501,7 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
     if errors:
         tool_calls.append({"tool": "schema_validation", "errors": errors, "skill": skill.name})
         nlp_severity = _nlp_severity_from_tool_calls(tool_calls)
-        final_severity = _blend_severity(macro_severity, nlp_severity)
+        final_severity = _blend_severity(macro_severity, nlp_severity, runtime)
         final_snapshot = dict(updated_snapshot)
         if nlp_severity is not None:
             final_snapshot["macro_nlp_severity"] = nlp_severity
@@ -509,7 +516,7 @@ def run_macro_agent(state: RiskState, llm) -> Dict[str, Any]:
         }
 
     nlp_severity = _nlp_severity_from_tool_calls(tool_calls)
-    final_severity = _blend_severity(macro_severity, nlp_severity)
+    final_severity = _blend_severity(macro_severity, nlp_severity, runtime)
     final_snapshot = dict(updated_snapshot)
     if nlp_severity is not None:
         final_snapshot["macro_nlp_severity"] = nlp_severity

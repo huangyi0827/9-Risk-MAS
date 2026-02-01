@@ -1,12 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any, Dict, List
 
 from langchain_core.messages import HumanMessage, SystemMessage
 
 from ..state import RiskState
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 from ..skills_runtime import load_skill, build_system_prompt, validate_output
 
 
@@ -23,24 +23,12 @@ def _llm_model_name(llm) -> str:
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or "")
 
 
-def _unavailable_nodes(data_quality: Dict[str, Any]) -> List[str]:
-    unavailable = []
-    if not (data_quality.get("macro") or {}).get("timeseries_available", False):
-        unavailable.append("macro")
-    if not (data_quality.get("compliance") or {}).get("text_available", False):
-        unavailable.append("compliance")
-    return unavailable
-
-
 def _fallback_result(
     candidates: List[str],
     *,
     used: bool,
     rationale: str,
-    unavailable: List[str],
 ) -> Dict[str, Any]:
-    if unavailable:
-        rationale = f"未纳入候选（数据不可用）：{','.join(unavailable)}"
     return {
         "nodes_to_run": candidates,
         "pending_agents": candidates,
@@ -56,22 +44,20 @@ def _normalize_nodes(nodes: List[str], candidates: List[str]) -> List[str]:
     return out
 
 
-def supervisor_chain(state: RiskState, llm, candidates: List[str]) -> Dict[str, Any]:
+def supervisor_chain(
+    state: RiskState, llm, candidates: List[str], config: RuntimeConfig | None = None
+) -> Dict[str, Any]:
+    cfg = config or DEFAULT_CONFIG
     if state.get("stop_condition"):
         return {}
 
-    enabled = os.getenv("ENABLE_SUPERVISOR", "1").strip() not in {"0", "false", "False"}
+    enabled = bool(cfg.enable_supervisor)
     if not enabled:
-        unavailable = _unavailable_nodes(state.get("data_quality") or {})
         return _fallback_result(
             candidates,
             used=False,
             rationale="disabled",
-            unavailable=unavailable,
         )
-
-    data_quality = state.get("data_quality") or {}
-    unavailable = _unavailable_nodes(data_quality)
 
     # If no LLM available, fall back to candidates unchanged.
     if llm is None:
@@ -79,7 +65,6 @@ def supervisor_chain(state: RiskState, llm, candidates: List[str]) -> Dict[str, 
             candidates,
             used=False,
             rationale="llm unavailable",
-            unavailable=unavailable,
         )
 
     skill = load_skill("supervisor-router")
@@ -109,7 +94,6 @@ def supervisor_chain(state: RiskState, llm, candidates: List[str]) -> Dict[str, 
             candidates,
             used=True,
             rationale="invalid json",
-            unavailable=unavailable,
         )
 
     errors = validate_output(skill, parsed)
@@ -118,13 +102,10 @@ def supervisor_chain(state: RiskState, llm, candidates: List[str]) -> Dict[str, 
             candidates,
             used=True,
             rationale=f"schema invalid: {errors}",
-            unavailable=unavailable,
         )
 
     nodes = _normalize_nodes(list(parsed.get("nodes_to_run") or []), candidates)
     rationale = str(parsed.get("rationale") or "")
-    if unavailable:
-        rationale = f"{rationale} 未纳入候选（数据不可用）：{','.join(unavailable)}".strip()
 
     chosen = nodes or candidates
     return {

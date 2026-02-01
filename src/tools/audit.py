@@ -8,6 +8,7 @@ from typing import Any, Dict
 from ..state import RiskState
 from ..skills_runtime import load_skill
 from .rules import load_rules
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 
 
 def _hash_payload(payload: Dict[str, Any]) -> str:
@@ -15,11 +16,13 @@ def _hash_payload(payload: Dict[str, Any]) -> str:
     return hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
 
 
-def audit_log(state: RiskState) -> Dict[str, Any]:
+def audit_log(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    """汇总审计信息（规则快照、工具调用、技能版本等）。"""
+    runtime = config or DEFAULT_CONFIG
     snapshot = state.get("snapshot_metrics") or {}
     rule_findings = state.get("rule_findings") or []
     profile = (state.get("normalized") or {}).get("policy_profile", "default")
-    rules, ruleset_version = load_rules(profile)
+    rules, ruleset_version = load_rules(profile, runtime)
     tool_calls = []
     tool_calls.extend(state.get("tool_calls_macro") or [])
     tool_calls.extend(state.get("tool_calls_compliance") or [])

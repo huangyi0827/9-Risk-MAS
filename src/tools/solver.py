@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import os
 from typing import Dict, Any, List, Tuple, Optional
 
 try:
@@ -8,6 +7,7 @@ try:
 except ImportError:  # pragma: no cover - optional dependency
     cp = None
 
+from ..config import RuntimeConfig, DEFAULT_CONFIG
 from ..state import RiskState
 from .rules import load_rules
 from .utils import normalize_weights, compute_hhi, compute_effective_n
@@ -78,9 +78,10 @@ def _adjust_weights(
     target_weights: Dict[str, float],
     profile: Dict[str, Any],
     drivers: List[str],
+    config: RuntimeConfig,
 ) -> Tuple[Dict[str, float], List[str]]:
     notes: List[str] = []
-    cash_symbol = str(profile.get("cash_symbol") or os.getenv("CASH_SYMBOL", "CASH")).strip() or "CASH"
+    cash_symbol = str(profile.get("cash_symbol") or config.cash_symbol).strip() or "CASH"
     cap = float(profile.get("max_single_weight", 1.0))
     adjusted = _cap_and_fill(target_weights, cap, cash_symbol)
     if adjusted != target_weights:
@@ -115,6 +116,7 @@ def _solve_lp(
     profile: Dict[str, Any],
     adv_by_symbol: Dict[str, float],
     aum: Optional[float],
+    config: RuntimeConfig,
 ) -> Optional[Dict[str, float]]:
     if cp is None:
         return None
@@ -158,10 +160,10 @@ def _solve_lp(
                 limit = max_adv_ratio
             constraints.append(u[i] <= limit)
 
-    turnover_weight = float(os.getenv("LP_TURNOVER_WEIGHT", "0.1"))
+    turnover_weight = float(config.lp_turnover_weight)
     objective = cp.Minimize(cp.sum(t) + turnover_weight * cp.sum(u))
     problem = cp.Problem(objective, constraints)
-    problem.solve(solver=os.getenv("LP_SOLVER") or None)
+    problem.solve(solver=config.lp_solver or None)
 
     if w.value is None:
         return None
@@ -172,7 +174,9 @@ def _solve_lp(
     return weights
 
 
-def constraint_solver(state: RiskState) -> Dict[str, Any]:
+def constraint_solver(state: RiskState, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+    """在 restrict 情况下生成调仓建议（LP 优先，其次启发式）。"""
+    cfg = config or DEFAULT_CONFIG
     decision = (state.get("decision") or {}).get("decision")
     if decision != "restrict":
         return {}
@@ -180,23 +184,13 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
     normalized = state.get("normalized") or {}
     target_weights = {k: float(v) for k, v in (normalized.get("target_weights") or {}).items()}
     current_weights = {k: float(v) for k, v in (normalized.get("current_positions") or {}).items()}
-    rules, _ = load_rules(normalized.get("policy_profile", "default"))
+    rules, _ = load_rules(normalized.get("policy_profile", "default"), cfg)
     max_holdings = normalized.get("target_holdings")
     if max_holdings is None:
-        env_holdings = os.getenv("TARGET_HOLDINGS", "").strip()
-        if env_holdings:
-            try:
-                max_holdings = int(env_holdings)
-            except ValueError:
-                max_holdings = None
+        max_holdings = cfg.target_holdings
     aum = normalized.get("aum")
     if aum is None:
-        env_aum = os.getenv("PORTFOLIO_AUM") or os.getenv("AUM")
-        if env_aum:
-            try:
-                aum = float(env_aum)
-            except ValueError:
-                aum = None
+        aum = cfg.default_aum
 
     report = state.get("risk_report") or {}
     findings = report.get("findings") or []
@@ -216,8 +210,8 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
     snapshot = state.get("snapshot_metrics") or {}
     adv_by_symbol = snapshot.get("adv_by_symbol") or {}
 
-    cash_symbol = str(rules.get("cash_symbol") or os.getenv("CASH_SYMBOL", "CASH")).strip() or "CASH"
-    adjusted_lp = _solve_lp(target_weights, current_weights, rules, adv_by_symbol, aum)
+    cash_symbol = str(rules.get("cash_symbol") or cfg.cash_symbol).strip() or "CASH"
+    adjusted_lp = _solve_lp(target_weights, current_weights, rules, adv_by_symbol, aum, cfg)
     if adjusted_lp and adjusted_lp != target_weights:
         adjusted_lp, limited = _limit_holdings(adjusted_lp, max_holdings, cash_symbol)
         rationale = "使用线性规划在约束下优化目标权重"
@@ -234,7 +228,7 @@ def constraint_solver(state: RiskState) -> Dict[str, Any]:
             ]
         }
 
-    adjusted, notes = _adjust_weights(target_weights, rules, drivers)
+    adjusted, notes = _adjust_weights(target_weights, rules, drivers, cfg)
     if adjusted and adjusted != target_weights:
         adjusted, limited = _limit_holdings(adjusted, max_holdings, cash_symbol)
         rationale_parts = []
