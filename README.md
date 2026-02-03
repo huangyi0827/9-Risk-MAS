@@ -7,7 +7,6 @@
 [![Python](https://img.shields.io/badge/Python-3.12+-blue.svg)](https://www.python.org/)
 [![LangGraph](https://img.shields.io/badge/LangGraph-1.0+-green.svg)](https://github.com/langchain-ai/langgraph)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Build](http://10.13.66.5:20091/Cufel-Practice/risk-mas/actions/workflows/ci.yml/badge.svg)](http://10.13.66.5:20091/Cufel-Practice/risk-mas/actions)
 
 *基于 LangChain、LangGraph 构建的 ETF 风控多智能体系统（MAS），覆盖输入规范化、指标快照、编排调度与结论输出，支持接入宏观时序与政策、合规文本数据，产出可审计的风险结论与调仓建议。*
 
@@ -74,7 +73,7 @@ Risk-MAS 是一个专为 ETF 投资组合设计的智能风控系统，采用多
 |:---:|:---|:---|
 | **📘 [PRACTICE.md](PRACTICE.md)** | 10个模块的实战练习，包含代码模板和测试检查 | 学习者：通过实践掌握 MAS 架构 |
 | **📐 [框架图说明_v2.md](框架图说明_v2.md)** | 详细的架构文档，包含数据流图和模块交互说明 | 开发者：深入理解系统设计 |
-| **📖 README.md** | 快速入门和使用指南 | 用户：快速上手使用系统 |
+| **📖 [README.md](README.md)** | 快速入门和使用指南 | 用户：快速上手使用系统 |
 
 > 💡 **推荐学习路径**：先阅读 README 了解系统 → 查看框架图说明理解架构 → 使用 PRACTICE.md 动手实践
 
