@@ -64,7 +64,7 @@
 - Python 基础
 - 基本的金融概念（ETF、投资组合、风险指标）
 - LangChain/LangGraph 基础（建议先完成官方教程）
-- 第三练NLP、第四练RAG
+- 第二练RAG、第四练NLP
 
 ---
 
