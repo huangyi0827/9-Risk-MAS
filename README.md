@@ -204,7 +204,7 @@ Risk-MAS 是一个专为 ETF 投资组合设计的智能风控系统，采用多
 
 ```bash
 # 克隆并安装
-git clone http://10.13.66.5:20091/Cufel-Practice/risk-mas && cd risk-mas
+git clone http://10.13.66.5:20091/Cufel-Practice/risk-mas.git && cd risk-mas
 uv sync
 
 # 配置环境变量
@@ -387,9 +387,9 @@ print(result)
  compliance      | 0        | 未发现合规问题     
 -----------------+----------+-------------------
 
----------------------------+------------------------------------------------------
+---------------------------+----------------------------------------------------------------------------
  AUDIT                     | VALUE
----------------------------+------------------------------------------------------
+---------------------------+----------------------------------------------------------------------------
  policy_profile            | default
  supervisor_result         | market,concentration,diversification,liquidity,compliance
  supervisor_rationale      | 组合集中度指标显示HHI上升、有效持仓数下降，且最大个股权重较高，需运行concentration和diversification节点深入分析；weighted_adv和max_adv_ratio提示流动性风险，需运行liquidity节点；market节点用于提供基础市场上下文；macro节点因宏观风险severity为0且无异常信号可跳过；compliance为合规必需节点，应保留。
@@ -399,7 +399,7 @@ print(result)
  tool_errors               | 0
  compliance_blocklist_soft | none
  compliance_industry_hits  | none
----------------------------+------------------------------------------------------
+---------------------------+----------------------------------------------------------------------------
 
 --------------------------+-------------+------------+--------
  RULE_KEY                 | VALUE       | CURRENT    | STATUS 
