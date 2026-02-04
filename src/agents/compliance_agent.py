@@ -1,25 +1,25 @@
 from __future__ import annotations
 
+import csv
 import hashlib
 import json
-import csv
-from pathlib import Path
 from datetime import datetime, timezone
-from typing import Any, Dict, List, Tuple
+from pathlib import Path
+from typing import Any
 
+from langchain.agents import create_agent
 import numpy as np
 from openai import OpenAI
-from langchain.agents import create_agent
 
 from .agent_utils import extract_tool_calls, last_ai_content, wrap_tool
+from ..config import RuntimeConfig, DEFAULT_CONFIG
+from ..skills_runtime import load_skill, build_system_prompt, filter_tools, validate_output
 from ..state import RiskState, Finding
 from ..tools.csv_data import etf_industry_map, etf_codes_by_industry
 from ..tools.rules import get_blocklist
-from ..config import RuntimeConfig, DEFAULT_CONFIG
-from ..skills_runtime import load_skill, build_system_prompt, filter_tools, validate_output
 
 
-def _provenance(source: str, params: Dict[str, Any]) -> Dict[str, Any]:
+def _provenance(source: str, params: dict[str, Any]) -> dict[str, Any]:
     payload = json.dumps(params, sort_keys=True, separators=(",", ":"))
     return {
         "source": source,
@@ -28,7 +28,7 @@ def _provenance(source: str, params: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-def _blocklist_payload(profile: str, runtime: RuntimeConfig) -> Dict[str, Any]:
+def _blocklist_payload(profile: str, runtime: RuntimeConfig) -> dict[str, Any]:
     # TODO: 改为基于合规语料的 RAG 方式生成禁投清单。
     blocklist, ruleset_version = get_blocklist(profile, runtime)
     return {
@@ -41,7 +41,7 @@ def _blocklist_payload(profile: str, runtime: RuntimeConfig) -> Dict[str, Any]:
 # ============ Embedding 客户端 ============
 
 _embedding_client: OpenAI | None = None
-_embedding_client_key: Tuple[str, str] | None = None
+_embedding_client_key: tuple[str, str] | None = None
 
 
 def _get_embedding_client(runtime: RuntimeConfig) -> OpenAI:
@@ -57,7 +57,7 @@ def _get_embedding_client(runtime: RuntimeConfig) -> OpenAI:
     return _embedding_client
 
 
-def _get_embeddings(texts: List[str], runtime: RuntimeConfig, model: str = "text-embedding-v4") -> np.ndarray:
+def _get_embeddings(texts: list[str], runtime: RuntimeConfig, model: str = "text-embedding-v4") -> np.ndarray:
     """批量获取文本的 embedding 向量"""
     if not texts:
         return np.array([])
@@ -78,12 +78,12 @@ def _cosine_similarity(a: np.ndarray, b: np.ndarray) -> np.ndarray:
 
 # ============ 文档缓存 ============
 
-_docs_cache: Dict[str, List[Dict[str, Any]]] = {}
-_embeddings_cache: Dict[Tuple[str, str, str], np.ndarray] = {}
-_industry_embeddings_cache: Tuple[List[str], np.ndarray, Tuple[str, str]] | None = None
+_docs_cache: dict[str, list[dict[str, Any]]] = {}
+_embeddings_cache: dict[tuple[str, str, str], np.ndarray] = {}
+_industry_embeddings_cache: tuple[list[str], np.ndarray, tuple[str, str]] | None = None
 
 
-def _get_cached_docs(path: Path) -> List[Dict[str, Any]]:
+def _get_cached_docs(path: Path) -> list[dict[str, Any]]:
     """获取缓存的文档，避免重复加载"""
     key = str(path)
     if key not in _docs_cache:
@@ -91,7 +91,7 @@ def _get_cached_docs(path: Path) -> List[Dict[str, Any]]:
     return _docs_cache[key]
 
 
-def _get_cached_embeddings(path: Path, docs: List[Dict[str, Any]], runtime: RuntimeConfig) -> np.ndarray:
+def _get_cached_embeddings(path: Path, docs: list[dict[str, Any]], runtime: RuntimeConfig) -> np.ndarray:
     """获取缓存的文档 embeddings"""
     key = (str(path), runtime.openai_api_key or "", runtime.openai_base_url or "")
     if key not in _embeddings_cache:
@@ -100,7 +100,7 @@ def _get_cached_embeddings(path: Path, docs: List[Dict[str, Any]], runtime: Runt
     return _embeddings_cache[key]
 
 
-def _get_industry_embeddings(industries: List[str], runtime: RuntimeConfig) -> Tuple[List[str], np.ndarray]:
+def _get_industry_embeddings(industries: list[str], runtime: RuntimeConfig) -> tuple[list[str], np.ndarray]:
     """获取缓存的行业名 embeddings"""
     global _industry_embeddings_cache
     key = (runtime.openai_api_key or "", runtime.openai_base_url or "")
@@ -138,7 +138,7 @@ def _resolve_rag_source(source: str, runtime: RuntimeConfig) -> Path | None:
     return None
 
 
-def _make_doc(item: Dict[str, Any], source: str) -> Dict[str, Any] | None:
+def _make_doc(item: dict[str, Any], source: str) -> dict[str, Any] | None:
     """从原始记录构建文档，返回 None 表示跳过。"""
     title = str(item.get("title") or item.get("name") or "")
     content = str(item.get("content") or item.get("text") or item.get("body") or "")
@@ -155,7 +155,7 @@ def _make_doc(item: Dict[str, Any], source: str) -> Dict[str, Any] | None:
     }
 
 
-def _load_rag_docs(path: Path) -> List[Dict[str, Any]]:
+def _load_rag_docs(path: Path) -> list[dict[str, Any]]:
     suffix = path.suffix.lower()
     source = str(path)
 
@@ -165,7 +165,7 @@ def _load_rag_docs(path: Path) -> List[Dict[str, Any]]:
 
     if suffix == ".csv":
         with path.open("r", encoding="utf-8", errors="ignore", newline="") as f:
-            items: List[Dict[str, Any]] = list(csv.DictReader(f))
+            items: list[dict[str, Any]] = list(csv.DictReader(f))
     elif suffix == ".jsonl":
         items = []
         for line in path.read_text(encoding="utf-8", errors="ignore").splitlines():
@@ -183,7 +183,7 @@ def _load_rag_docs(path: Path) -> List[Dict[str, Any]]:
     return [doc for item in items if isinstance(item, dict) and (doc := _make_doc(item, source))]
 
 
-def _keyword_retrieve(docs: List[Dict[str, Any]], query: str, limit: int) -> List[Dict[str, Any]]:
+def _keyword_retrieve(docs: list[dict[str, Any]], query: str, limit: int) -> list[dict[str, Any]]:
     """关键词检索（fallback）"""
     if not query or not docs:
         return []
@@ -208,12 +208,12 @@ def _keyword_retrieve(docs: List[Dict[str, Any]], query: str, limit: int) -> Lis
 
 def _vector_retrieve(
     path: Path,
-    docs: List[Dict[str, Any]],
+    docs: list[dict[str, Any]],
     query: str,
     limit: int,
     runtime: RuntimeConfig,
     min_score: float = 0.3,
-) -> List[Dict[str, Any]]:
+) -> list[dict[str, Any]]:
     """向量检索（使用 text-embedding-v4）"""
     if not query or not docs:
         return []
@@ -242,10 +242,10 @@ def _vector_retrieve(
 
 
 def _infer_industry_hits(
-    hits: List[Dict[str, Any]],
+    hits: list[dict[str, Any]],
     runtime: RuntimeConfig,
     min_similarity: float = 0.5,
-) -> List[str]:
+) -> list[str]:
     """从检索结果中推断相关行业，使用 embedding 相似度匹配。
 
     Args:
@@ -273,8 +273,8 @@ def _infer_industry_hits(
         industry_names, industry_embeddings = _get_industry_embeddings(industries, runtime)
         
         # 收集所有需要计算 embedding 的文本
-        texts_to_embed: List[str] = []
-        text_indices: List[int] = []  # 记录有效文本对应的 hit 索引
+        texts_to_embed: list[str] = []
+        text_indices: list[int] = []  # 记录有效文本对应的 hit 索引
         
         for i, hit in enumerate(hits):
             meta = hit.get("meta") or {}
@@ -315,7 +315,7 @@ def rag_search(
     limit: int = 5,
     source: str | None = None,
     runtime: RuntimeConfig | None = None,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """RAG 检索函数，支持向量检索和关键词检索。
 
     用法：
@@ -365,7 +365,7 @@ def rag_search(
     }
 
 
-def _tool_arg_value(args: Tuple[Any, ...], kwargs: Dict[str, Any], key: str) -> Any:
+def _tool_arg_value(args: tuple[Any, ...], kwargs: dict[str, Any], key: str) -> Any:
     if key in kwargs and kwargs[key] not in (None, ""):
         return kwargs[key]
     if "args" in kwargs and kwargs.get("args"):
@@ -381,7 +381,7 @@ def _tool_arg_value(args: Tuple[Any, ...], kwargs: Dict[str, Any], key: str) -> 
     return None
 
 
-def _policy_search_impl(runtime: RuntimeConfig, *args, **kwargs) -> Dict[str, Any]:
+def _policy_search_impl(runtime: RuntimeConfig, *args, **kwargs) -> dict[str, Any]:
     """Search compliance docs for a query string.
 
     返回检索结果，包含：
@@ -418,7 +418,7 @@ def _policy_search_impl(runtime: RuntimeConfig, *args, **kwargs) -> Dict[str, An
     }
 
 
-def _allowlist_check_impl(runtime: RuntimeConfig, *args, **kwargs) -> Dict[str, Any]:
+def _allowlist_check_impl(runtime: RuntimeConfig, *args, **kwargs) -> dict[str, Any]:
     """Check if a code is allowed by policy."""
     code = _tool_arg_value(args, kwargs, "code")
     profile = kwargs.get("profile") or (args[1] if len(args) > 1 else "default")
@@ -449,15 +449,15 @@ def _allowlist_check_tool(runtime: RuntimeConfig):
 def _llm_model_name(llm) -> str:
     return str(getattr(llm, "model_name", None) or getattr(llm, "model", None) or "")
 
-def _build_policy_query(normalized: Dict[str, Any]) -> str:
+def _build_policy_query(normalized: dict[str, Any]) -> str:
     jurisdiction = str(normalized.get("jurisdiction") or "CN").strip()
     account_type = str(normalized.get("account_type") or "brokerage").strip()
     return f"ETF blocklist for {jurisdiction} {account_type} account"
 
 
 def _extract_rag_blocklist(
-    tool_calls: List[Dict[str, Any]],
-) -> Tuple[List[str], List[str], str]:
+    tool_calls: list[dict[str, Any]],
+) -> tuple[list[str], list[str], str]:
     """从工具调用结果中提取 blocklist 和文档上下文。
 
     Returns:
@@ -465,7 +465,7 @@ def _extract_rag_blocklist(
     """
     codes: set[str] = set()
     industries: set[str] = set()
-    contexts: List[str] = []
+    contexts: list[str] = []
 
     for call in tool_calls:
         if call.get("tool") != "policy_search":
@@ -489,9 +489,9 @@ def _extract_rag_blocklist(
 
 def _fallback_finding(
     state: RiskState,
-    hard_blocklist: List[str],
-    soft_blocklist: List[str],
-    industry_hits: List[str],
+    hard_blocklist: list[str],
+    soft_blocklist: list[str],
+    industry_hits: list[str],
 ) -> Finding:
     normalized = state.get("normalized") or {}
     targets = normalized.get("target_weights") or {}
@@ -528,15 +528,15 @@ def _fallback_finding(
     }
 
 
-def run_compliance_agent(state: RiskState, llm, config: RuntimeConfig | None = None) -> Dict[str, Any]:
+def run_compliance_agent(state: RiskState, llm, config: RuntimeConfig | None = None) -> dict[str, Any]:
     """运行合规 Agent：基于检索上下文输出结构化结论。"""
     runtime = config or DEFAULT_CONFIG
     normalized = state.get("normalized") or {}
     profile = normalized.get("policy_profile", "default")
     blocklist_payload = _blocklist_payload(profile, runtime)
     hard_blocklist = blocklist_payload.get("items") or []
-    soft_blocklist: List[str] = []
-    industry_hits: List[str] = []
+    soft_blocklist: list[str] = []
+    industry_hits: list[str] = []
     targets = normalized.get("target_weights") or {}
     blocked_targets = [c for c in targets if c in hard_blocklist]
 
