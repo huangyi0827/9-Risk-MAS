@@ -204,7 +204,7 @@ Risk-MAS 是一个专为 ETF 投资组合设计的智能风控系统，采用多
 
 ```bash
 # 克隆并安装
-git clone http://10.13.66.5:20091/Cufel-Practice/risk-mas.git && cd risk-mas
+git clone http://10.13.66.5:20091/Cufel-Practice/9-risk-mas.git && cd 9-risk-mas
 uv sync
 
 # 配置环境变量
@@ -720,8 +720,8 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series \
 
 **Risk-MAS** - 让风控更智能、更可靠
 
-[![Gitea](https://img.shields.io/badge/Gitea-Repository-green?logo=gitea)](http://10.13.66.5:20091/Cufel-Practice/risk-mas)
+[![Gitea](https://img.shields.io/badge/Gitea-Repository-green?logo=gitea)](http://10.13.66.5:20091/Cufel-Practice/9-risk-mas)
 
-如有问题或建议，欢迎提交 [Issue](http://10.13.66.5:20091/Cufel-Practice/risk-mas/issues)
+如有问题或建议，欢迎提交 [Issue](http://10.13.66.5:20091/Cufel-Practice/9-risk-mas/issues)
 
 </div>
