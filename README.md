@@ -71,9 +71,10 @@ Risk-MAS 是一个专为 ETF 投资组合设计的智能风控系统，采用多
 
 | 资源 | 说明 | 适合人群 |
 |:---:|:---|:---|
+| **📖 [README.md](README.md)** | 快速入门和使用指南 | 用户：快速上手使用系统 |
 | **📘 [PRACTICE.md](PRACTICE.md)** | 10个模块的实战练习，包含代码模板和测试检查 | 学习者：通过实践掌握 MAS 架构 |
 | **📐 [框架图说明_v2.md](框架图说明_v2.md)** | 详细的架构文档，包含数据流图和模块交互说明 | 开发者：深入理解系统设计 |
-| **📖 [README.md](README.md)** | 快速入门和使用指南 | 用户：快速上手使用系统 |
+
 
 > 💡 **推荐学习路径**：先阅读 README 了解系统 → 查看框架图说明理解架构 → 使用 PRACTICE.md 动手实践
 
@@ -208,7 +209,7 @@ git clone http://10.13.66.5:20091/Cufel-Practice/9-risk-mas.git && cd 9-risk-mas
 uv sync
 
 # 配置环境变量
-cp .env.example .env
+touch .env
 # 编辑 .env 填入 LLM API Key 等配置
 
 # 运行
