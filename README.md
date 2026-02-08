@@ -213,7 +213,7 @@ touch .env
 # 编辑 .env 填入 LLM API Key 等配置
 
 # 运行
-uv run --env-file .env -- python -u -m src.app
+uv run --env-file .env -- python -u test.py
 ```
 
 ### 环境要求
