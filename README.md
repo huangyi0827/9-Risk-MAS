@@ -721,8 +721,8 @@ uv run --env-file .env -- python -u -m src.tools.calibrate_macro_series \
 
 **Risk-MAS** - 让风控更智能、更可靠
 
-[![Gitea](https://img.shields.io/badge/Gitea-Repository-green?logo=gitea)](http://10.13.66.5:20091/Cufel-Practice/9-risk-mas)
+[![GitHub](https://img.shields.io/badge/GitHub-Repository-black?logo=github)](https://github.com/huangyi0827/9-Risk-MAS)
 
-如有问题或建议，欢迎提交 [Issue](http://10.13.66.5:20091/Cufel-Practice/9-risk-mas/issues)
+如有问题或建议，欢迎提交 [Issue](https://github.com/huangyi0827/9-Risk-MAS/issues)
 
 </div>
