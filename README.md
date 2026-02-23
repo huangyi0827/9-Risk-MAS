@@ -205,7 +205,7 @@ Risk-MAS 是一个专为 ETF 投资组合设计的智能风控系统，采用多
 
 ```bash
 # 克隆并安装
-git clone http://10.13.66.5:20091/Cufel-Practice/9-risk-mas.git && cd 9-risk-mas
+git clone https://github.com/huangyi0827/9-Risk-MAS.git && cd 9-Risk-MAS
 uv sync
 
 # 配置环境变量
